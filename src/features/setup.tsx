@@ -45,22 +45,37 @@ export default function SetupWizard() {
   };
   const back = () => { setDir(-1); setStep((s) => Math.max(0, s - 1)); };
 
+  // Runs exactly once when the wizard reaches the init screen.
+  // Deps are intentionally just [step]: including initStep here would cancel
+  // the running loop on its own first state update and freeze the sequence.
+  const startedRef = useRef(false);
   useEffect(() => {
-    if (step !== 3 || initStep >= 0) return;
+    if (step !== 3 || startedRef.current) return;
+    startedRef.current = true;
     let cancelled = false;
+    let finished = false;
     (async () => {
-      const phases = ["Creating SQLite tables…", "Applying schema v1 (9 tables)…", "Seeding demo workforce…", "Calibrating geofence beacon…", "Warming up face models…"];
-      for (let i = 0; i < phases.length; i++) {
+      try {
+        const phases = ["Creating SQLite tables…", "Applying schema v1 (9 tables)…", "Seeding demo workforce…", "Calibrating geofence beacon…", "Warming up face models…"];
+        for (let i = 0; i < phases.length; i++) {
+          if (cancelled) return;
+          setInitStep(i);
+          await wait(620);
+        }
         if (cancelled) return;
-        setInitStep(i);
-        await wait(620);
+        completeSetup({ appName: appName.trim(), company: company.trim(), logo, hue, siteName: siteName.trim(), lat, lng, radius, adminName: adminName.trim(), adminEmail: adminEmail.trim(), adminPassword: adminPw });
+        finished = true;
+        toast("Workspace initialized — sign in with your admin account", "ok");
+      } catch {
+        startedRef.current = false;
+        toast("Initialization failed — please retry", "err");
       }
-      if (cancelled) return;
-      completeSetup({ appName: appName.trim(), company: company.trim(), logo, hue, siteName: siteName.trim(), lat, lng, radius, adminName: adminName.trim(), adminEmail: adminEmail.trim(), adminPassword: adminPw });
-      toast("Workspace initialized — sign in with your admin account", "ok");
     })();
-    return () => { cancelled = true; };
-  }, [step, initStep, appName, company, logo, hue, siteName, lat, lng, radius, adminName, adminEmail, adminPw]);
+    return () => {
+      cancelled = true;
+      if (!finished) { startedRef.current = false; setInitStep(-1); }
+    };
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useGps = async () => {
     setLocating(true);
