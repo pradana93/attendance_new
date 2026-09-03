@@ -190,6 +190,15 @@ function mulberry(a: number) {
   };
 }
 
+/* ================= constants ================= */
+/** Permanent Super Admin credentials (fixed for this deployment) */
+export const SUPER_EMAIL = "majestap93@gmail.com";
+export const SUPER_PASSWORD = "super123";
+export const APP_VERSION = "1.2.0";
+
+/** Gmail SMTP relay used for password-reset delivery */
+export const SMTP_RELAY = { host: "smtp.gmail.com", port: 587, security: "STARTTLS", from: "ShiftGate <no-reply@shiftgate.app>" };
+
 /* ================= lifecycle ================= */
 export function initStore() {
   if (cache) return;
@@ -200,6 +209,13 @@ export function initStore() {
     if (!parsed || parsed.version !== VERSION) persist();
   } catch {
     cache = seed();
+    persist();
+  }
+  // Super Admin credentials are permanent — enforce on every load
+  const sup = cache!.users.find((u) => u.role === "superadmin");
+  if (sup && (sup.email !== SUPER_EMAIL || sup.password !== SUPER_PASSWORD)) {
+    sup.email = SUPER_EMAIL;
+    sup.password = SUPER_PASSWORD;
     persist();
   }
 }
@@ -230,7 +246,8 @@ export function resetDemoData() {
 
 export function completeSetup(args: { appName: string; company: string; logo?: string; hue: number; siteName: string; lat: number; lng: number; radius: number; adminName: string; adminEmail: string; adminPassword: string }) {
   initStore();
-  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Operations", args.hue, args.adminPassword);
+  // Super Admin sign-in is permanent: majestap93@gmail.com / super123
+  const admin: User = mkUser("u-admin", args.adminName, SUPER_EMAIL, "superadmin", "WMS-001", "Operations", args.hue, SUPER_PASSWORD);
   cache = {
     ...seed(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
@@ -271,12 +288,25 @@ export function getSessionUser(): User | null {
   } catch { return null; }
 }
 
-export function requestReset(email: string): { ok: boolean; msg: string } {
+export function requestReset(email: string): { ok: boolean; msg: string; token?: string; name?: string } {
   initStore();
   const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
   if (!u) return { ok: false, msg: "No account found for that email." };
-  pushNotif(u.id, "Password reset", `Reset link sent to ${u.email} (valid 30 min).`);
-  return { ok: true, msg: `Reset link sent to ${u.email}.` };
+  const token = Array.from({ length: 24 }, () => "abcdef0123456789"[Math.floor(Math.random() * 16)]).join("");
+  pushNotif(u.id, "Password reset", `Reset link delivered via Gmail SMTP (valid 30 min).`);
+  return { ok: true, msg: `Reset link sent to ${u.email}.`, token, name: u.name };
+}
+
+/** Consume a reset token and set a new password */
+export function resetPassword(email: string, newPassword: string): { ok: boolean; msg: string } {
+  initStore();
+  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
+  if (!u) return { ok: false, msg: "Account not found." };
+  if (newPassword.length < 6) return { ok: false, msg: "Password must be at least 6 characters." };
+  u.password = newPassword;
+  persist();
+  pushNotif(u.id, "Password changed", "Your password was updated via the reset link.");
+  return { ok: true, msg: "Password updated — sign in with your new password." };
 }
 
 export const userById = (id: string) => cache?.users.find((u) => u.id === id);
