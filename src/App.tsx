@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon } from "lucide-react";
+import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon, WifiOff } from "lucide-react";
 import type { User } from "./types";
 import { getDB, getSessionUser, hasWorkspace, initStore, logout, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
 import { fmtClock, fmtDate, relTime } from "./lib/util";
@@ -62,20 +62,39 @@ export default function App() {
   );
 }
 
+const BOOT_LINES = ["mount local store", "load geofence beacon", "arm face model", "open gate"];
+
 function Splash() {
   const db = getDB();
   return (
-    <div className="flex min-h-dvh items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <div className="a-floaty flex h-14 w-14 items-center justify-center rounded-2xl border border-line"
-          style={{ background: `linear-gradient(135deg, hsl(${db?.settings.hue ?? 38} 70% 45%), hsl(${(db?.settings.hue ?? 38) + 30} 65% 28%))` }}>
-          <Boxes size={26} className="text-white" />
+    <div className="flex min-h-dvh items-center justify-center px-6">
+      <div className="flex w-full max-w-[260px] flex-col items-center">
+        {/* roller door revealing the brand mark */}
+        <div className="doorwrap">
+          <div className="doorfloor">
+            <div className="a-pop flex h-12 w-12 items-center justify-center rounded-xl border border-line shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+              style={{ background: `linear-gradient(135deg, hsl(${db?.settings.hue ?? 38} 70% 45%), hsl(${(db?.settings.hue ?? 38) + 30} 65% 28%))`, animationDelay: "0.7s" }}>
+              <Boxes size={22} className="text-white" />
+            </div>
+          </div>
+          <div className="door" />
         </div>
-        <p className="ttl text-lg font-bold text-ink">{db?.settings.appName ?? "ShiftGate"}</p>
-        <div className="h-1 w-28 overflow-hidden rounded-full bg-line2">
-          <div className="h-full w-1/2 rounded-full bg-amber" style={{ animation: "shimmer 1.1s linear infinite" }} />
+        <p className="ttl mt-4 text-2xl font-bold tracking-wide text-ink">{db?.settings.appName ?? "ShiftGate"}</p>
+        <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.24em] text-faint">warehouse attendance os</p>
+
+        <div className="mt-5 w-full space-y-1.5">
+          {BOOT_LINES.map((l, i) => (
+            <div key={l} className="a-fadein flex items-center justify-between font-mono text-[10px] uppercase tracking-widest"
+              style={{ animationDelay: `${0.15 + i * 0.16}s` }}>
+              <span className="text-faint">{l}</span>
+              <span className="text-ok">ok</span>
+            </div>
+          ))}
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-faint">warehouse attendance os</p>
+
+        <div className="mt-4 h-[3px] w-full overflow-hidden rounded-full bg-line2">
+          <div className="h-full w-1/2 rounded-full bg-amber" style={{ animation: "shimmer 1.05s linear infinite" }} />
+        </div>
       </div>
     </div>
   );
@@ -89,8 +108,17 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const [online, setOnline] = useState(() => navigator.onLine);
   const navRef = useRef(nav);
   navRef.current = nav;
+
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
 
   const { tab, sec: adminSec } = nav;
 
@@ -168,11 +196,19 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
           <div className="min-w-0 flex-1 leading-tight">
             <p className="ttl truncate text-[15px] font-bold text-ink">{db.settings.appName}</p>
             <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-wider text-faint">
-              <LiveDot /> {db.settings.siteName}
+              <span className="led" /> {db.settings.siteName}
               {tab === "fifth" && adminSec !== "live" && <span className="text-amber">· {adminSec}</span>}
             </p>
           </div>
-          <span className="hidden font-mono text-[11.5px] tabular-nums text-mut min-[380px]:inline">{fmtClock(clock)}</span>
+          <span className="hidden font-mono text-[11.5px] tabular text-mut min-[380px]:inline">
+            {(() => {
+              const [h, m, s] = fmtClock(clock).split(":");
+              return <>{h}<span className="colon">:</span>{m}<span className="colon">:</span>{s}</>;
+            })()}
+          </span>
+          {!online && (
+            <Chip tone="amber" className="shrink-0"><WifiOff size={11} /> {t("h.offline")}</Chip>
+          )}
           <button onClick={() => { setBellOpen(true); markNotisRead(user.id); }}
             className="tap relative rounded-[10px] border border-line bg-panel2 p-2 text-mut hover:text-ink" aria-label={t("c.notifications")}>
             <Bell size={16} />
@@ -188,8 +224,15 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
 
       {/* page — bottom padding clears the fixed tab bar + device safe area */}
       <main className="app-main px-4 pt-4">
-        <div key={tab + adminSec} className="a-fadein">
-          {tab === "home" && <Dashboard user={user} goTab={(x) => goTab(x as Tab)} />}
+        <div key={tab + adminSec} className="pagein">
+          {tab === "home" && (
+            <Dashboard
+              user={user}
+              goTab={(x) => goTab(x as Tab)}
+              onBell={() => { setBellOpen(true); markNotisRead(user.id); }}
+              onAdminSec={(s) => goAdminSec(s as AdminSec)}
+            />
+          )}
           {tab === "piket" && <Schedule user={user} />}
           {tab === "stats" && <Performance user={user} />}
           {tab === "ot" && <Overtime user={user} />}
@@ -208,7 +251,7 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
                 <button key={tb.id} onClick={() => goTab(tb.id)}
                   className={`tap relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 ${active ? "text-amber" : "text-faint hover:text-mut"}`}>
                   <span className={`absolute -top-1.5 h-[3px] w-7 rounded-full bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
-                  <Ic size={20} className={active ? "drop-shadow-[0_0_8px_rgba(255,178,36,0.5)]" : ""} />
+                  <Ic size={20} className={active ? "navpop drop-shadow-[0_0_8px_rgba(255,178,36,0.5)]" : ""} />
                   <span className="ttl text-[9.5px] font-bold tracking-wide">{tb.label}</span>
                   {tb.id === "ot" && isAdmin && (db.ot.filter((o) => o.status === "pending").length > 0) && (
                     <span className="absolute right-[22%] top-0.5 h-1.5 w-1.5 rounded-full bg-bad" />

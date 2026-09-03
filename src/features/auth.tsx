@@ -55,7 +55,22 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
         </div>
         <h1 className="ttl text-3xl font-bold tracking-wide text-ink">{db?.settings.appName ?? "ShiftGate"}</h1>
         <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.22em] text-faint">{db?.settings.company} · {db?.settings.siteName}</p>
-        <div className="hazard mx-auto mt-4 h-1.5 w-24 rounded-full opacity-90" />
+        <div className="conveyor mx-auto mt-4 h-1.5 w-24 rounded-full opacity-90" />
+      </div>
+
+      {/* systems-armed boot checklist */}
+      <div className="card mb-4 px-4 py-3">
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="ttl text-[11px] font-bold text-faint">systems armed</p>
+          <span className="led" />
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+          {["local store", "geofence", "face model", "secure link"].map((s, i) => (
+            <p key={s} className="a-fadein flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-wider text-mut" style={{ animationDelay: `${0.25 + i * 0.12}s` }}>
+              <CheckCircle2 size={12} className="text-ok" /> {s}
+            </p>
+          ))}
+        </div>
       </div>
 
       <form key={shake} onSubmit={submit} className={`card space-y-4 p-5 ${shake ? "a-shake" : "a-rise"}`}>

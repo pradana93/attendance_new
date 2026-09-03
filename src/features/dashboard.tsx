@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import confetti from "canvas-confetti";
 import {
-  AlertTriangle, ArrowLeftRight, Camera, Check, ChevronRight, Clock3, ClipboardList, Cloud,
-  CloudFog, CloudLightning, CloudRain, CloudSun, MapPin, Megaphone, QrCode, ScanFace, Send,
-  Star, Sun, Thermometer, Timer, Wind, XCircle,
+  AlertTriangle, ArrowLeftRight, Bell as BellIcon, Camera, Check, ChevronRight, Clock3,
+  ClipboardList, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun, MapPin, Megaphone,
+  QrCode, ScanFace, Search, Send, Star, Sun, Thermometer, Timer, User as UserIcon, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
 import { addHandover, completePiket, confirmHandover, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord, userName } from "../lib/store";
-import { fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, todayKey, wait } from "../lib/util";
+import { copyText, fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, relTime, todayKey, vibrate, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
 import { Btn, Chip, Field, LiveDot, Reveal, SectionTitle, Seg, Sheet, toast, useCountUp } from "../components/ui";
@@ -16,8 +16,22 @@ import { Spark } from "../components/charts";
 
 type Kind = "in" | "out" | "done";
 
+/** "3h 02m" since a timestamp, ticking with `now` */
+function elapsedSince(iso: string | undefined, now: Date): string {
+  if (!iso) return "0m";
+  const ms = Math.max(0, now.getTime() - new Date(iso).getTime());
+  const m = Math.floor(ms / 60000);
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${m}m`;
+}
+
 /* =============== dashboard =============== */
-export default function Dashboard({ user, goTab }: { user: User; goTab: (t: string) => void }) {
+export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
+  user: User;
+  goTab: (t: string) => void;
+  onBell: () => void;
+  onAdminSec: (s: string) => void;
+}) {
   const db = getDB();
   const t = useT();
   const [now, setNow] = useState(new Date());
@@ -94,6 +108,10 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
         <Chip tone="amber">{user.employeeId}</Chip>
       </div>
 
+      {/* global search */}
+      <SearchBar isAdmin={isAdmin} goTab={goTab} onBell={onBell} onAdminSec={onAdminSec}
+        onNotice={(a) => setAnn(a)} />
+
       {/* geofence status strip */}
       <button onClick={() => setFlowOpen(true)}
         className={`tap card flex w-full items-center gap-3 border-l-[3px] p-3 text-left ${inside === false ? "border-l-bad" : "border-l-ok"}`}>
@@ -113,11 +131,16 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
 
       {/* clock + punch card */}
       <div className="card overflow-hidden">
-        <div className="hazard h-1.5 w-full" />
-        <div className="p-4">
+        <div className="conveyor h-1.5 w-full" />
+        <div className="clockface p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-mono text-[38px] font-semibold leading-none tracking-tight text-ink tabular-nums">{fmtClock(now)}</p>
+              <p className="tabular font-mono text-[42px] font-semibold leading-none tracking-tight text-ink">
+                {(() => {
+                  const [h, m, s] = fmtClock(now).split(":");
+                  return <>{h}<span className="colon">:</span>{m}<span className="colon">:</span>{s}</>;
+                })()}
+              </p>
               <p className="mt-1.5 font-mono text-[11px] uppercase tracking-wider text-faint">
                 {db?.settings.siteName} · gate beacon active
               </p>
@@ -128,6 +151,18 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
                 {kind === "done" ? t("d.shiftcomplete") : kind === "out" ? t("d.onduty") : t("d.notin")}
               </p>
             </div>
+          </div>
+
+          {/* shift progress — 08:00 → 17:00 */}
+          <div className="mt-3.5">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line2">
+              <div className="h-full rounded-full bg-gradient-to-r from-amberd to-amber transition-[width] duration-700"
+                style={{ width: `${Math.min(100, Math.max(0, Math.round(((now.getTime() - new Date(new Date(now).setHours(8, 0, 0, 0)).getTime()) / (9 * 3600 * 1000)) * 100)))}%` }} />
+            </div>
+            <p className="mt-1.5 flex justify-between font-mono text-[9.5px] uppercase tracking-widest text-faint">
+              <span>shift 08:00 – 17:00</span>
+              <span className="tabular text-amber">{Math.min(100, Math.max(0, Math.round(((now.getTime() - new Date(new Date(now).setHours(8, 0, 0, 0)).getTime()) / (9 * 3600 * 1000)) * 100)))}%</span>
+            </p>
           </div>
 
           {kind === "done" ? (
@@ -143,8 +178,8 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
             </div>
           ) : (
             <button onClick={() => setFlowOpen(true)}
-              className="tap group mt-4 block w-full overflow-hidden rounded-xl bg-amber text-left shadow-[0_10px_30px_rgba(255,178,36,0.25)] hover:brightness-110">
-              <div className="flex items-center justify-between px-4 py-4">
+              className="punch group mt-4 block w-full overflow-hidden rounded-xl bg-amber text-left shadow-[0_12px_32px_rgba(255,178,36,0.28),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-3px_0_rgba(0,0,0,0.18)] hover:brightness-110">
+              <div className="relative z-10 flex items-center justify-between px-4 py-4">
                 <div>
                   <p className="ttl text-[22px] font-extrabold leading-none text-[#191203]">
                     {kind === "in" ? t("d.checkin") : t("d.checkout")}
@@ -158,14 +193,18 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
                 </span>
               </div>
               {kind === "out" && (
-                <div className="border-t border-[#191203]/15 bg-[#191203]/8 px-4 py-1.5 font-mono text-[11px] text-[#3d2e03]">
-                  {fmtTime(rec?.checkIn)} → · {rec?.late ? t("f.late") : t("f.onTime")}
+                <div className="relative z-10 flex items-center justify-between border-t border-[#191203]/15 bg-[#191203]/8 px-4 py-1.5 font-mono text-[11px] text-[#3d2e03]">
+                  <span>{t("d.onDutyFor")} {elapsedSince(rec?.checkIn, now)}</span>
+                  <span>{rec?.late ? t("f.late") : t("f.onTime")}</span>
                 </div>
               )}
             </button>
           )}
         </div>
       </div>
+
+      {/* ops brief — admin digest */}
+      <OpsBrief isAdmin={isAdmin} rain={!!wx && wxInfo(wx.code).rain} />
 
       {/* stats strip */}
       <div className="grid grid-cols-5 gap-3">
@@ -483,6 +522,7 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
     const kind: Kind = rec?.checkIn && rec?.checkOut ? "done" : rec?.checkIn ? "out" : "in";
     const score = method === "face" ? randInt(88, 99) : undefined;
     if (kind === "done") {
+      vibrate(40);
       setResult({ ok: true, kind, dist: gps.dist, method, rec });
       setStage("result");
       return;
@@ -491,6 +531,7 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
     setResult({ ok: true, kind, score, dist: gps.dist, method, rec: punched ?? undefined });
     setStage("result");
     onDone();
+    vibrate(kind === "in" ? [40, 60, 90] : [40, 60, 40]);
     confetti({ particleCount: kind === "in" ? 90 : 60, spread: 75, origin: { y: 0.65 }, colors: ["#ffb224", "#3ed598", "#5ac8e8", "#e8edf3"], disableForReducedMotion: true });
     toast(kind === "in" ? `${t("f.checkedIn")} · ${fmtTime(punched?.checkIn)}` : `${t("f.checkedOut")}`, "ok");
   };
@@ -803,5 +844,199 @@ function HandoverSheet({ user, open, onClose }: { user: User; open: boolean; onC
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">{t("h.forCrew")}</p>
       </div>
     </Sheet>
+  );
+}
+
+/* =============== global search =============== */
+interface SearchHit {
+  kind: "staff" | "task" | "notif" | "news";
+  title: string;
+  sub: string;
+  go: () => void;
+}
+
+function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
+  isAdmin: boolean;
+  goTab: (t: string) => void;
+  onBell: () => void;
+  onAdminSec: (s: string) => void;
+  onNotice: (a: Announcement) => void;
+}) {
+  const db = getDB();
+  const t = useT();
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  if (!db) return null;
+  const needle = q.trim().toLowerCase();
+
+  const hits: SearchHit[] = useMemo(() => {
+    if (!needle) return [];
+    const out: SearchHit[] = [];
+    if (isAdmin) {
+      db.users.filter((u) => u.role === "staff")
+        .filter((u) => `${u.name} ${u.employeeId} ${u.department}`.toLowerCase().includes(needle))
+        .slice(0, 4)
+        .forEach((u) => out.push({
+          kind: "staff", title: u.name, sub: `${u.employeeId} · ${u.department}`,
+          go: () => { onAdminSec("staff"); setOpen(false); setQ(""); },
+        }));
+    }
+    db.tasks.filter((x) => x.active)
+      .filter((x) => `${x.name} ${x.area}`.toLowerCase().includes(needle))
+      .slice(0, 3)
+      .forEach((x) => out.push({
+        kind: "task", title: x.name, sub: `${x.area} · +${x.points} ${t("c.pts")}`,
+        go: () => { goTab("piket"); setOpen(false); setQ(""); },
+      }));
+    db.notifications
+      .filter((n) => `${n.title} ${n.body}`.toLowerCase().includes(needle))
+      .slice(0, 3)
+      .forEach((n) => out.push({
+        kind: "notif", title: n.title, sub: relTime(n.date),
+        go: () => { onBell(); setOpen(false); setQ(""); },
+      }));
+    db.announcements
+      .filter((a) => `${a.title} ${a.body}`.toLowerCase().includes(needle))
+      .slice(0, 3)
+      .forEach((a) => out.push({
+        kind: "news", title: a.title, sub: `${a.author} · ${fmtDate(a.date)}`,
+        go: () => { onNotice(a); setOpen(false); setQ(""); },
+      }));
+    return out.slice(0, 8);
+  }, [needle, db, isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ICON: Record<SearchHit["kind"], typeof Search> = {
+    staff: UserIcon, task: ClipboardList, notif: BellIcon, news: Megaphone,
+  };
+  const LABEL: Record<SearchHit["kind"], string> = {
+    staff: t("sr.staff"), task: t("sr.tasks"), notif: t("sr.notifs"), news: t("sr.news"),
+  };
+
+  return (
+    <div className="relative">
+      <div className="card flex items-center gap-2.5 px-3.5 py-2.5">
+        <Search size={16} className="shrink-0 text-faint" />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={t("sr.placeholder")}
+          className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
+        />
+        {q && (
+          <button onClick={() => { setQ(""); }} className="tap text-faint hover:text-ink" aria-label="clear">
+            <XCircle size={15} />
+          </button>
+        )}
+      </div>
+      {open && needle && (
+        <div className="a-drop absolute inset-x-0 top-full z-30 mt-1.5 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+          {hits.length === 0 ? (
+            <p className="px-4 py-5 text-center font-mono text-[11.5px] text-faint">{t("sr.noResults")}</p>
+          ) : (
+            <div className="divide-y divide-line2">
+              {hits.map((h, i) => {
+                const Ic = ICON[h.kind];
+                return (
+                  <button key={i} onClick={h.go}
+                    className="tap flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-panel2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber/12 text-amber"><Ic size={15} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-ink">{h.title}</p>
+                      <p className="truncate font-mono text-[10.5px] text-faint">{h.sub}</p>
+                    </div>
+                    <Chip tone="mut">{LABEL[h.kind]}</Chip>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =============== ops brief (admin) =============== */
+function OpsBrief({ isAdmin, rain }: { isAdmin: boolean; rain: boolean }) {
+  const db = getDB();
+  const t = useT();
+  if (!db || !isAdmin) return null;
+  const today = todayKey();
+  const staff = db.users.filter((u) => u.role === "staff" && u.active);
+  const att = db.attendance.filter((a) => a.date === today);
+  const checked = att.filter((a) => a.checkIn);
+  const late = att.filter((a) => a.late);
+  const notIn = staff.filter((u) => !att.some((a) => a.userId === u.id && a.checkIn));
+  const piketTotal = db.tasks.filter((x) => x.active).length;
+  const piketDone = db.piketLog.filter((l) => l.date === today).length;
+  const pendOT = db.ot.filter((o) => o.status === "pending").length;
+  const pendSwap = db.swapRequests.filter((s) => s.status === "pending").length;
+  const selfRep = att.filter((a) => a.selfReport).length;
+  const pct = piketTotal ? Math.round((piketDone / piketTotal) * 100) : 0;
+  const allClear = notIn.length === 0 && late.length === 0 && pendOT === 0 && pendSwap === 0 && selfRep === 0 && !rain;
+
+  const briefText = [
+    `${db.settings.appName} — Ops Brief · ${fmtDateLong(today)}`,
+    `Site: ${db.settings.siteName}`,
+    `• ${t("ob.onDuty")}: ${checked.length}/${staff.length} staff`,
+    `• ${t("ob.lateN").toUpperCase()}: ${late.length}`,
+    `• ${t("ob.notIn")}: ${notIn.length ? notIn.slice(0, 5).map((u) => u.name.split(" ")[0]).join(", ") + (notIn.length > 5 ? ` +${notIn.length - 5}` : "") : "—"}`,
+    `• ${t("ob.piketDone")}: ${piketDone}/${piketTotal} (${pct}%)`,
+    `• ${t("ob.pending")}: ${pendOT} ${t("ob.ot")} · ${pendSwap} ${t("ob.swaps")} · ${selfRep} ${t("ob.selfRep")}`,
+    rain ? `• ⚠ ${t("ob.rain")}` : `• ${t("ob.allClear")}`,
+  ].join("\n");
+
+  return (
+    <Reveal delay={50}>
+      <div className="card border-l-[3px] border-l-amber p-3.5">
+        <div className="mb-2.5 flex items-center justify-between">
+          <SectionTitle>
+            <span className="inline-flex items-center gap-1.5"><ClipboardList size={14} className="text-amber" /> {t("ob.title")}</span>
+          </SectionTitle>
+          <button onClick={async () => { const ok = await copyText(briefText); toast(ok ? t("ob.copied") : "—", ok ? "ok" : "err"); }}
+            className="tap flex items-center gap-1 font-mono text-[11px] text-amber hover:underline">
+            <CopyMini /> {t("ob.copy")}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="card2 px-3 py-2">
+            <p className="font-mono text-[19px] font-semibold leading-none text-ink tabular-nums">{checked.length}<span className="text-[12px] text-faint">/{staff.length}</span></p>
+            <p className="ttl mt-1 text-[10px] font-bold text-mut">{t("ob.onDuty")}</p>
+          </div>
+          <div className="card2 px-3 py-2">
+            <p className="font-mono text-[19px] font-semibold leading-none text-ink tabular-nums">{pct}<span className="text-[12px] text-faint">%</span></p>
+            <p className="ttl mt-1 text-[10px] font-bold text-mut">{t("ob.piketDone")}</p>
+          </div>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Chip tone={late.length ? "bad" : "ok"}>{late.length} {t("ob.lateN")}</Chip>
+          <Chip tone={notIn.length ? "amber" : "ok"}>{notIn.length} {t("ob.notIn").toLowerCase()}</Chip>
+          <Chip tone={pendOT ? "cool" : "mut"}>{pendOT} {t("ob.ot")}</Chip>
+          <Chip tone={pendSwap ? "cool" : "mut"}>{pendSwap} {t("ob.swaps")}</Chip>
+          <Chip tone={selfRep ? "amber" : "mut"}>{selfRep} {t("ob.selfRep")}</Chip>
+          {rain && <Chip tone="cool"><CloudRain size={11} /> {t("ob.rain").split("—")[0].trim()}</Chip>}
+        </div>
+
+        {notIn.length > 0 && (
+          <p className="mt-2 truncate font-mono text-[10.5px] text-faint">
+            {t("ob.notIn")}: {notIn.slice(0, 5).map((u) => u.name.split(" ")[0]).join(", ")}{notIn.length > 5 ? ` +${notIn.length - 5}` : ""}
+          </p>
+        )}
+        {allClear && (
+          <p className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ok"><Check size={12} /> {t("ob.allClear")}</p>
+        )}
+      </div>
+    </Reveal>
+  );
+}
+
+function CopyMini() {
+  return (
+    <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
   );
 }

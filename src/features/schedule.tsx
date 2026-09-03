@@ -9,7 +9,7 @@ import {
   addItem, completePiket, decideSwap, deleteTask, getDB, grantBonus, piketForDate, redeem,
   requestSwap, rotateTemplate, saveTask, setAssignment, userName,
 } from "../lib/store";
-import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey } from "../lib/util";
+import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, vibrate } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
@@ -88,6 +88,7 @@ function Roster({ user }: { user: User }) {
   const doComplete = (task: PiketTask, date: string, userId: string, photo?: string) => {
     const res = completePiket(date, task.id, userId, photo);
     if (res.ok) {
+      vibrate([30, 50, 60]);
       toast(`${task.name} · ${res.msg}`, "ok");
       confetti({ particleCount: 40, spread: 58, origin: { y: 0.7 }, colors: ["#ffb224", "#3ed598"], disableForReducedMotion: true });
     } else toast(res.msg, "err");

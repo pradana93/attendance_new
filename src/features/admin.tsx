@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
 import {
   Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
   Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
@@ -51,6 +52,74 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
   );
 }
 
+/* ---------------- floor radar (leaflet) ---------------- */
+/** deterministic pseudo-random offset per user so dots stay stable across renders */
+function userOffset(id: string, radius: number): { lat: number; lng: number } {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  const angle = ((Math.abs(h) % 360) * Math.PI) / 180;
+  const dist = radius * (0.2 + (Math.abs(h >> 3) % 55) / 100);
+  return {
+    lat: (dist * Math.sin(angle)) / 111000,
+    lng: (dist * Math.cos(angle)) / (111000 * 0.75),
+  };
+}
+
+function FloorRadar({ onDutyIds }: { onDutyIds: string[] }) {
+  const db = getDB();
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!db || !ref.current || mapRef.current) return;
+    const { lat, lng, radius } = db.settings;
+    const map = L.map(ref.current, {
+      zoomControl: false, attributionControl: false, dragging: false,
+      scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false,
+    });
+    map.setView([lat, lng], 17);
+    L.circle([lat, lng], { radius, color: "#ffb224", weight: 2, dashArray: "6 6", fillColor: "#ffb224", fillOpacity: 0.08 }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
+  }, [db?.settings.lat, db?.settings.lng, db?.settings.radius]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // re-draw on-duty dots whenever the set changes
+  useEffect(() => {
+    if (!db || !mapRef.current || !layerRef.current) return;
+    const { lat, lng } = db.settings;
+    layerRef.current.clearLayers();
+    // beacon
+    L.circleMarker([lat, lng], { radius: 5, color: "#ffb224", weight: 2, fillColor: "#ffb224", fillOpacity: 1 }).addTo(layerRef.current);
+    onDutyIds.forEach((id) => {
+      const u = db.users.find((x) => x.id === id);
+      if (!u) return;
+      const off = userOffset(id, db.settings.radius);
+      L.marker([lat + off.lat, lng + off.lng], {
+        icon: L.divIcon({ className: "", html: `<div class="mk-user"></div>`, iconSize: [15, 15], iconAnchor: [7, 7] }),
+      }).bindTooltip(`${u.name} · ${u.department}`, { direction: "top", offset: L.point(0, -8) }).addTo(layerRef.current!);
+    });
+  }, [onDutyIds.join(","), db?.users.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!db) return null;
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between px-3.5 pt-3">
+        <p className="ttl inline-flex items-center gap-1.5 text-[12px] font-bold text-ink">
+          <Radio size={14} className="text-cool" /> {t("lr.title")}
+        </p>
+        <Chip tone="ok"><span className="pulse-dot mr-1 inline-block h-1.5 w-1.5 rounded-full bg-ok" /> {onDutyIds.length} {t("lr.live")}</Chip>
+      </div>
+      <div ref={ref} className="mt-2 h-[190px] w-full" style={{ zIndex: 0 }} />
+      <p className="border-t border-line2 bg-panel2/60 px-3.5 py-1.5 text-center font-mono text-[9.5px] uppercase tracking-widest text-faint">
+        {t("lr.sim")}
+      </p>
+    </div>
+  );
+}
+
 /* ---------------- live board ---------------- */
 function LiveBoard() {
   const db = getDB();
@@ -86,6 +155,9 @@ function LiveBoard() {
           <p className="mt-1.5 font-mono text-[22px] font-semibold leading-none text-ink">{rows.filter((r) => r.late).length}</p>
         </div>
       </div>
+
+      {/* floor radar — live positions of on-duty staff */}
+      <FloorRadar onDutyIds={onDuty.map((r) => r.userId)} />
 
       <div className="flex items-center justify-between">
         <p className="font-mono text-[10.5px] uppercase tracking-widest text-faint">auto-refresh · {today}</p>
