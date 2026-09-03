@@ -17,6 +17,19 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "1.6.0", date: "2026-03-10", name: "Ops upgrades & installable app",
+    items: [
+      { tag: "fixed", text: "Logout & changelog are now reachable for every role — tap your avatar in the header to open the profile sheet." },
+      { tag: "fixed", text: "Toast notifications were silently dropped (never mounted) — feedback now shows across the whole app." },
+      { tag: "new", text: "Shift handover log: outgoing crew posts notes + pending issues, incoming crew confirms receipt." },
+      { tag: "new", text: "Piket swap requests: staff ask a colleague to cover a duty day; admin approves; roster updates for that date." },
+      { tag: "new", text: "Attendance CSV export from the live board for payroll/HR handoff." },
+      { tag: "new", text: "Achievement badges in Stats: Iron Streak, Perfect Month, On-Time Ace, Piket Champion, OT Machine." },
+      { tag: "new", text: "Live dock-weather card on the dashboard (temperature, wind, rain alerts at the warehouse GPS)." },
+      { tag: "new", text: "Installable PWA: manifest, offline service worker and an Install button in the profile sheet." },
+    ],
+  },
+  {
     version: "1.5.0", date: "2026-03-02", name: "UI/UX health check",
     items: [
       { tag: "fixed", text: "Overlay stacking rebuilt: every sheet, dialog, lightbox and toast now portals to the document root — nothing can render under the tab bar anymore." },

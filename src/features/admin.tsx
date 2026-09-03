@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
-  Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus, Radio,
-  RefreshCw, ScanFace, Settings2, Sun, Trash2, UserPlus, Users, X,
+  Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
+  Radio, RefreshCw, ScanFace, Settings2, Sun, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import type { Lang, Role, User } from "../types";
 import {
@@ -10,7 +10,7 @@ import {
   getDB, manualLog, rerunSetup, resetDemoData, reviewSelfReport, supabaseSQL, syncSupabase,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
-import { fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
+import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
@@ -94,6 +94,21 @@ function LiveBoard() {
             <RefreshCw size={12} /> {t("a.refresh")}
           </button>
           <Btn variant="ghost" className="!px-2.5 !py-1.5 text-[12px]" onClick={() => setShowManual(true)}><Plus size={13} /> {t("a.manual")}</Btn>
+          <button onClick={() => {
+            if (!db) return;
+            const rows = db.attendance.filter((a) => a.date === today);
+            downloadCSV(`attendance-${today}.csv`, [
+              ["Date", "Employee", "Department", "Check-in", "Check-out", "Late", "Method", "Face match %", "Distance m"],
+              ...rows.map((a) => {
+                const u = db.users.find((x) => x.id === a.userId);
+                return [a.date, u?.name ?? a.userId, u?.department ?? "", a.checkIn ? fmtTime(a.checkIn) : "", a.checkOut ? fmtTime(a.checkOut) : "", a.late ? "YES" : "no", a.method ?? "face", a.inScore ?? "", a.distance ?? ""];
+              }),
+            ]);
+            toast(`${rows.length} rows → CSV`, "ok");
+          }}
+            className="tap flex items-center gap-1.5 rounded-lg border border-line bg-panel2 px-2.5 py-1.5 font-mono text-[11px] text-mut hover:text-ink">
+            <Download size={12} /> CSV
+          </button>
         </div>
       </div>
 

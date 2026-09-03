@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
 import {
-  Camera, Check, ChevronLeft, ChevronRight, ClipboardList, Coffee, Cookie, Gift, Grid3x3,
-  History, Package, Pencil, Plus, RefreshCw, RotateCw, Shield, Sparkles, Ticket, Trash2, Wallet,
+  ArrowLeftRight, Camera, Check, ChevronLeft, ChevronRight, ClipboardList, Coffee, Cookie, Gift,
+  Grid3x3, History, Package, Pencil, Plus, RefreshCw, RotateCw, Shield, Sparkles, Ticket, Trash2, Wallet, X,
 } from "lucide-react";
 import type { PiketTask, User } from "../types";
 import {
-  addItem, completePiket, deleteTask, getDB, grantBonus, piketForDate, redeem,
-  rotateTemplate, saveTask, setAssignment,
+  addItem, completePiket, decideSwap, deleteTask, getDB, grantBonus, piketForDate, redeem,
+  requestSwap, rotateTemplate, saveTask, setAssignment, userName,
 } from "../lib/store";
 import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
@@ -65,6 +65,7 @@ function Roster({ user }: { user: User }) {
   const [delTask, setDelTask] = useState<PiketTask | null>(null);
   const [proofFor, setProofFor] = useState<{ task: PiketTask; date: string; userId: string } | null>(null);
   const [viewPhoto, setViewPhoto] = useState<{ src: string; caption: string } | null>(null);
+  const [swapFor, setSwapFor] = useState<{ task: PiketTask; date: string } | null>(null);
   const monday = useMemo(() => mondayOf(new Date()), []);
   if (!db) return null;
   const dayLabels = db.settings.language === "id" ? DAY_LABELS_ID : DAY_LABELS_EN;
@@ -149,7 +150,13 @@ function Roster({ user }: { user: User }) {
                         ) : k <= todayKey() ? (
                           <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: user.id }) : doComplete(task, k, user.id)}
                             className="tap rounded-lg border border-amber/45 bg-amber/10 px-2.5 py-1 font-mono text-[10.5px] uppercase text-amber hover:bg-amber/20">{t("p.complete")}</button>
-                        ) : <span className="font-mono text-[10px] uppercase text-faint">—</span>}
+                        ) : (
+                          <button onClick={() => setSwapFor({ task, date: k })}
+                            className="tap flex items-center gap-1 rounded-lg border border-line bg-panel2 px-2 py-1 font-mono text-[10px] uppercase text-mut hover:border-cool/50 hover:text-cool"
+                            title={t("sw.title")}>
+                            <ArrowLeftRight size={11} /> {t("sw.ask")}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -164,6 +171,7 @@ function Roster({ user }: { user: User }) {
       {/* ---------- admin week view ---------- */}
       {isAdmin && adminView === "week" && (
         <>
+          <SwapQueue />
           <DayChips sel={selDay} setSel={setSelDay} labels={dayLabels} monday={monday} />
           <div className="space-y-2">
             {rows.length === 0 && <Empty icon={<ClipboardList size={26} />} title={t("p.unassigned")} sub={`${t("p.template")} →`} />}
@@ -273,6 +281,107 @@ function Roster({ user }: { user: User }) {
         onSave={(photo) => proofFor && doComplete(proofFor.task, proofFor.date, proofFor.userId, photo)}
       />
       <Lightbox src={viewPhoto?.src ?? null} onClose={() => setViewPhoto(null)} caption={viewPhoto?.caption} />
+      {swapFor && <SwapSheet swapFor={swapFor} me={user} onClose={() => setSwapFor(null)} />}
+    </div>
+  );
+}
+
+/* ---------------- piket swap request (staff) ---------------- */
+function SwapSheet({ swapFor, me, onClose }: { swapFor: { task: PiketTask; date: string }; me: User; onClose: () => void }) {
+  const db = getDB();
+  const t = useT();
+  const [target, setTarget] = useState("");
+  const [reason, setReason] = useState("");
+  if (!db) return null;
+  const colleagues = db.users.filter((u) => u.role === "staff" && u.active && u.id !== me.id);
+  const myPending = db.swapRequests.filter((s) => s.fromUserId === me.id && s.status === "pending");
+
+  return (
+    <Sheet open onClose={onClose} title={`${t("sw.title")} — ${swapFor.task.name}`}>
+      <div className="space-y-3.5">
+        <div className="card2 flex items-center justify-between px-3.5 py-2.5">
+          <p className="font-mono text-[12px] text-mut">{fmtDate(swapFor.date)} · +{swapFor.task.points} {t("c.pts")}</p>
+          <Chip tone="mut">{swapFor.task.area}</Chip>
+        </div>
+        <Field label={t("sw.with")}>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+            {colleagues.map((c) => (
+              <button key={c.id} onClick={() => setTarget(c.id)}
+                className={`tap flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 ${target === c.id ? "border-cool/60 bg-cool/10" : "border-line bg-panel2"}`}>
+                <Avatar user={c} size={24} />
+                <span className="text-[12px] font-medium text-ink">{c.name.split(" ")[0]}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label={t("o.reason")}>
+          <textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ada urusan keluarga…" />
+        </Field>
+        <Btn className="w-full" disabled={!target || !reason.trim()} onClick={() => {
+          const res = requestSwap(me.id, target, swapFor.date, swapFor.task.id, reason.trim());
+          toast(res.msg, res.ok ? "ok" : "err");
+          if (res.ok) onClose();
+        }}><ArrowLeftRight size={15} /> {t("sw.send")}</Btn>
+
+        {myPending.length > 0 && (
+          <div>
+            <p className="ttl mb-1.5 text-[11px] font-bold uppercase tracking-wider text-faint">{t("sw.mine")}</p>
+            <div className="space-y-1.5">
+              {myPending.map((s) => {
+                const tk = db.tasks.find((x) => x.id === s.taskId);
+                return (
+                  <div key={s.id} className="card2 flex items-center justify-between px-3 py-2">
+                    <p className="truncate text-[12px] text-mut">{tk?.name} · {fmtDate(s.date)} → {userName(s.toUserId)}</p>
+                    <Chip tone="amber">{t("sw.pending")}</Chip>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/* ---------------- pending swap approvals (admin) ---------------- */
+function SwapQueue() {
+  const db = getDB();
+  const t = useT();
+  if (!db) return null;
+  const pending = db.swapRequests.filter((s) => s.status === "pending");
+  if (!pending.length) return null;
+  return (
+    <div className="card border-cool/35 p-3.5">
+      <p className="ttl mb-2 flex items-center gap-1.5 text-[12px] font-bold text-cool">
+        <ArrowLeftRight size={13} /> {t("sw.adminQ")} <Chip tone="cool">{pending.length}</Chip>
+      </p>
+      <div className="space-y-2">
+        {pending.map((s) => {
+          const tk = db.tasks.find((x) => x.id === s.taskId);
+          return (
+            <div key={s.id} className="card2 p-2.5">
+              <div className="flex items-center gap-2">
+                <p className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-ink">
+                  {userName(s.fromUserId)} <span className="text-faint">→</span> {userName(s.toUserId)}
+                </p>
+                <span className="shrink-0 font-mono text-[10px] text-faint">{fmtDate(s.date)}</span>
+              </div>
+              <p className="mt-0.5 font-mono text-[10.5px] text-faint">{tk?.name} · “{s.reason}”</p>
+              <div className="mt-2 flex gap-2">
+                <button onClick={() => { decideSwap(s.id, true, "admin"); toast(t("sw.approve") + " ✓", "ok"); }}
+                  className="tap flex flex-1 items-center justify-center gap-1 rounded-lg border border-ok/40 bg-ok/10 py-1.5 font-mono text-[11px] uppercase text-ok hover:bg-ok/20">
+                  <Check size={12} /> {t("o.approve")}
+                </button>
+                <button onClick={() => { decideSwap(s.id, false, "admin"); toast(t("sw.reject"), "info"); }}
+                  className="tap flex flex-1 items-center justify-center gap-1 rounded-lg border border-bad/40 bg-bad/10 py-1.5 font-mono text-[11px] uppercase text-bad hover:bg-bad/20">
+                  <X size={12} /> {t("o.reject")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

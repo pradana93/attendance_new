@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import confetti from "canvas-confetti";
 import {
-  Camera, Check, ChevronRight, Clock3, ClipboardList, MapPin, Megaphone, QrCode,
-  ScanFace, Star, Timer, XCircle,
+  AlertTriangle, ArrowLeftRight, Camera, Check, ChevronRight, Clock3, ClipboardList, Cloud,
+  CloudFog, CloudLightning, CloudRain, CloudSun, MapPin, Megaphone, QrCode, ScanFace, Send,
+  Star, Sun, Thermometer, Timer, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
-import { completePiket, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord } from "../lib/store";
+import { addHandover, completePiket, confirmHandover, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord, userName } from "../lib/store";
 import { fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
-import { Btn, Chip, LiveDot, Reveal, SectionTitle, Sheet, toast, useCountUp } from "../components/ui";
+import { Btn, Chip, Field, LiveDot, Reveal, SectionTitle, Seg, Sheet, toast, useCountUp } from "../components/ui";
 import { Spark } from "../components/charts";
 
 type Kind = "in" | "out" | "done";
@@ -25,6 +26,19 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
   const [ann, setAnn] = useState<Announcement | null>(null);
   const [geo, setGeo] = useState<{ dist: number; simulated: boolean } | null>(null);
   const [proofTask, setProofTask] = useState<{ task: PiketTask; date: string } | null>(null);
+  const [handoverOpen, setHandoverOpen] = useState(false);
+  const [wx, setWx] = useState<{ t: number; code: number; w: number } | null>(null);
+
+  // live dock weather at the warehouse GPS (open-meteo, no key needed)
+  useEffect(() => {
+    if (!db) return;
+    let on = true;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${db.settings.lat}&longitude=${db.settings.lng}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => { if (on && j?.current) setWx({ t: j.current.temperature_2m, code: j.current.weather_code, w: j.current.wind_speed_10m }); })
+      .catch(() => { /* offline — card stays hidden */ });
+    return () => { on = false; };
+  }, [db?.settings.lat, db?.settings.lng]); // eslint-disable-line react-hooks/exhaustive-deps
   const rec = todayRecord(user.id);
   const stats = useMemo(() => statsFor(user.id), [user.id, now.getMinutes()]); // eslint-disable-line react-hooks/exhaustive-deps
   const kind: Kind = rec?.checkIn && rec?.checkOut ? "done" : rec?.checkIn ? "out" : "in";
@@ -93,6 +107,9 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
         {geo === null ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber border-t-transparent" />
           : inside ? <Chip tone="ok">{t("f.inside")}</Chip> : <Chip tone="bad">{t("f.outside")}</Chip>}
       </button>
+
+      {/* dock weather — dock crews plan tarps & container doors around rain */}
+      {wx && <WxCard wx={wx} />}
 
       {/* clock + punch card */}
       <div className="card overflow-hidden">
@@ -216,6 +233,9 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
         </button>
       )}
 
+      {/* shift handover */}
+      <HandoverCard user={user} onWrite={() => setHandoverOpen(true)} />
+
       {/* announcements */}
       <Reveal delay={60}>
       <div>
@@ -302,6 +322,9 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
         title={proofTask ? `${proofTask.task.name} — ${t("p.takeProof")}` : ""}
         onSave={(photo) => proofTask && finishTask(proofTask.task, photo)}
       />
+
+      {/* write shift handover */}
+      <HandoverSheet user={user} open={handoverOpen} onClose={() => setHandoverOpen(false)} />
     </div>
   );
 }
@@ -643,5 +666,142 @@ function FakeQR({ seed }: { seed: string }) {
         {m.map((row, y) => row.map((on, x) => (on ? <rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill="#101418" /> : null)))}
       </svg>
     </div>
+  );
+}
+
+/* =============== dock weather =============== */
+type WxKey = "w.clear" | "w.partly" | "w.cloudy" | "w.fog" | "w.rainL" | "w.storm";
+function wxInfo(code: number): { key: WxKey; icon: typeof Sun; rain: boolean } {
+  if (code === 0) return { key: "w.clear", icon: Sun, rain: false };
+  if (code <= 2) return { key: "w.partly", icon: CloudSun, rain: false };
+  if (code === 3) return { key: "w.cloudy", icon: Cloud, rain: false };
+  if (code === 45 || code === 48) return { key: "w.fog", icon: CloudFog, rain: false };
+  if (code >= 95) return { key: "w.storm", icon: CloudLightning, rain: true };
+  return { key: "w.rainL", icon: CloudRain, rain: true };
+}
+
+function WxCard({ wx }: { wx: { t: number; code: number; w: number } }) {
+  const t = useT();
+  const info = wxInfo(wx.code);
+  const Icon = info.icon;
+  return (
+    <div className={`card flex items-center gap-3 border-l-[3px] p-3 ${info.rain ? "border-l-cool" : "border-l-amber"}`}>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${info.rain ? "bg-cool/12 text-cool" : "bg-amber/12 text-amber"}`}>
+        <Icon size={20} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="font-mono text-[22px] font-semibold leading-none text-ink tabular-nums">{Math.round(wx.t)}°C</p>
+          <p className="ttl text-[12px] font-bold text-mut">{t(info.key)}</p>
+        </div>
+        <p className="mt-1 flex items-center gap-1.5 font-mono text-[10.5px] text-faint">
+          <Wind size={11} /> {Math.round(wx.w)} km/h {t("w.wind")} · <Thermometer size={11} /> {t("w.dock")}
+        </p>
+      </div>
+      {info.rain ? <Chip tone="cool"><CloudRain size={11} /> {t("w.rainHint")}</Chip>
+        : <span className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-widest text-faint"><LiveDot tone="amber" /> {t("w.live")}</span>}
+    </div>
+  );
+}
+
+/* =============== shift handover =============== */
+const SHIFT_KEY: Record<string, "h.morning" | "h.afternoon" | "h.night"> = {
+  morning: "h.morning", afternoon: "h.afternoon", night: "h.night",
+};
+
+function HandoverCard({ user, onWrite }: { user: User; onWrite: () => void }) {
+  const db = getDB();
+  const t = useT();
+  if (!db) return null;
+  const list = [...db.handovers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 2);
+  return (
+    <Reveal delay={40}>
+      <div className="card p-3.5">
+        <div className="mb-2.5 flex items-center justify-between">
+          <SectionTitle>
+            <span className="inline-flex items-center gap-1.5"><ArrowLeftRight size={14} className="text-amber" /> {t("h.title")}</span>
+          </SectionTitle>
+          <button onClick={onWrite} className="tap flex items-center gap-1 font-mono text-[11px] text-amber hover:underline">
+            <Send size={12} /> {t("h.write")}
+          </button>
+        </div>
+        {list.length === 0 ? (
+          <p className="py-2 text-center font-mono text-[11.5px] text-faint">{t("h.empty")}</p>
+        ) : (
+          <div className="space-y-2">
+            {list.map((h) => {
+              const author = db.users.find((u) => u.id === h.fromUserId);
+              const canConfirm = !h.confirmedBy && h.fromUserId !== user.id;
+              return (
+                <div key={h.id} className={`card2 p-3 ${h.issue ? "border-l-[3px] border-l-bad" : ""}`}>
+                  <div className="flex items-center gap-2">
+                    <Chip tone={h.shiftId === "night" ? "cool" : h.shiftId === "morning" ? "amber" : "ok"}>
+                      {t(SHIFT_KEY[h.shiftId] ?? "h.morning")}
+                    </Chip>
+                    <p className="truncate text-[12px] font-semibold text-ink">{author?.name ?? "—"}</p>
+                    <span className="ml-auto shrink-0 font-mono text-[9.5px] text-faint">{fmtDate(h.date)} · {fmtTime(h.createdAt)}</span>
+                  </div>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-mut">{h.note}</p>
+                  {h.issue && (
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-bad/8 px-2.5 py-1.5 text-[11.5px] leading-snug text-bad">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" /> {h.issue}
+                    </p>
+                  )}
+                  <div className="mt-2">
+                    {h.confirmedBy ? (
+                      <Chip tone="ok"><Check size={11} /> {t("h.confirmed")} · {userName(h.confirmedBy)}</Chip>
+                    ) : canConfirm ? (
+                      <Btn variant="ghost" className="!px-3 !py-1.5 text-[12px]" onClick={() => { confirmHandover(h.id, user.id); toast(`${t("h.confirm")} ✓`, "ok"); }}>
+                        <Check size={13} /> {t("h.confirm")}
+                      </Btn>
+                    ) : (
+                      <Chip tone="amber">{t("h.awaiting")}</Chip>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Reveal>
+  );
+}
+
+function HandoverSheet({ user, open, onClose }: { user: User; open: boolean; onClose: () => void }) {
+  const t = useT();
+  const [shift, setShift] = useState<"morning" | "afternoon" | "night">("morning");
+  const [note, setNote] = useState("");
+  const [issue, setIssue] = useState("");
+  useEffect(() => {
+    if (open) {
+      const h = new Date().getHours();
+      setShift(h < 12 ? "morning" : h < 17 ? "afternoon" : "night");
+      setNote(""); setIssue("");
+    }
+  }, [open]);
+  return (
+    <Sheet open={open} onClose={onClose} title={t("h.write")}>
+      <div className="space-y-3.5">
+        <Field label={t("h.shift")}>
+          <Seg value={shift} onChange={setShift} options={[
+            { id: "morning", label: t("h.morning") }, { id: "afternoon", label: t("h.afternoon") }, { id: "night", label: t("h.night") },
+          ]} />
+        </Field>
+        <Field label={t("h.note")}>
+          <textarea className="inp min-h-[84px] resize-none" value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder="Container status, pending loads, equipment condition…" />
+        </Field>
+        <Field label={t("h.issue")}>
+          <input className="inp" value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="Rolling door B2 macet…" />
+        </Field>
+        <Btn className="w-full" disabled={!note.trim()} onClick={() => {
+          const res = addHandover(user.id, todayKey(), shift, note.trim(), issue);
+          toast(res.msg, res.ok ? "ok" : "err");
+          if (res.ok) onClose();
+        }}><Send size={15} /> {t("h.post")}</Btn>
+        <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">{t("h.forCrew")}</p>
+      </div>
+    </Sheet>
   );
 }

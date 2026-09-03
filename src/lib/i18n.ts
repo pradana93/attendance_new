@@ -101,6 +101,30 @@ const en = {
   "m.notifyApproval": "Notify on approvals", "m.session": "Session", "m.jwt": "JWT · 1h expiry · auto-renew",
   "m.leaveReason": "Reason for leave", "m.submit": "Submit", "m.profile": "Profile", "m.supabase": "Supabase cloud",
   "m.offline": "offline cache",
+  // handover
+  "h.title": "Shift handover", "h.write": "Write handover", "h.confirm": "Confirm received",
+  "h.note": "Handover note", "h.issue": "Pending issue (optional)", "h.shift": "Your shift",
+  "h.confirmed": "confirmed", "h.awaiting": "awaiting confirmation", "h.empty": "No handover yet",
+  "h.emptySub": "Write one before your shift ends — the next crew reads it.",
+  "h.morning": "Morning", "h.afternoon": "Afternoon", "h.night": "Night", "h.post": "Post handover",
+  "h.issueFlag": "pending issue", "h.forCrew": "for the next crew",
+  // swaps
+  "sw.title": "Swap request", "sw.ask": "swap", "sw.with": "Swap with", "sw.send": "Send request",
+  "sw.mine": "My swap requests", "sw.pending": "pending", "sw.approve": "Approve swap", "sw.reject": "Reject swap",
+  "sw.incoming": "wants to swap with you", "sw.covers": "will cover", "sw.adminQ": "Pending swap approvals",
+  "sw.noneQ": "No pending swaps", "sw.noneQSub": "Swap requests from staff will appear here.",
+  // badges
+  "b.title": "Badges", "b.streak": "Iron Streak", "b.streakD": "7+ days perfect attendance",
+  "b.month": "Perfect Month", "b.monthD": "95%+ attendance this month", "b.ontime": "On-Time Ace",
+  "b.ontimeD": "Zero late arrivals this month", "b.champ": "Piket Champion", "b.champD": "150+ points balance",
+  "b.ot": "OT Machine", "b.otD": "8+ approved OT hours this month",
+  // weather
+  "w.dock": "Dock weather", "w.clear": "Clear", "w.partly": "Partly cloudy", "w.cloudy": "Overcast",
+  "w.fog": "Fog", "w.rainL": "Rain", "w.storm": "Storm", "w.rainHint": "Cover open containers",
+  "w.wind": "wind", "w.live": "live",
+  // profile sheet
+  "pf.install": "Install app", "pf.installHint": "Full-screen & offline — or use browser menu → Add to home screen",
+  "pf.member": "Member since", "pf.quick": "Quick settings",
 };
 
 export type TKey = keyof typeof en;
@@ -194,6 +218,30 @@ const id: Record<TKey, string> = {
   "m.notifyApproval": "Notifikasi persetujuan", "m.session": "Sesi", "m.jwt": "JWT · kedaluwarsa 1 jam · perpanjang otomatis",
   "m.leaveReason": "Alasan cuti", "m.submit": "Kirim", "m.profile": "Profil", "m.supabase": "Cloud Supabase",
   "m.offline": "cache offline",
+  // handover
+  "h.title": "Operan shift", "h.write": "Tulis operan", "h.confirm": "Konfirmasi terima",
+  "h.note": "Catatan operan", "h.issue": "Masalah terbuka (opsional)", "h.shift": "Shift Anda",
+  "h.confirmed": "dikonfirmasi", "h.awaiting": "menunggu konfirmasi", "h.empty": "Belum ada operan",
+  "h.emptySub": "Tulis sebelum shift berakhir — kru berikutnya akan membacanya.",
+  "h.morning": "Pagi", "h.afternoon": "Siang", "h.night": "Malam", "h.post": "Kirim operan",
+  "h.issueFlag": "ada masalah terbuka", "h.forCrew": "untuk kru berikutnya",
+  // swaps
+  "sw.title": "Tukar piket", "sw.ask": "tukar", "sw.with": "Tukar dengan", "sw.send": "Kirim pengajuan",
+  "sw.mine": "Pengajuan tukar saya", "sw.pending": "menunggu", "sw.approve": "Setujui tukar", "sw.reject": "Tolak tukar",
+  "sw.incoming": "ingin tukar piket dengan Anda", "sw.covers": "menggantikan", "sw.adminQ": "Persetujuan tukar piket",
+  "sw.noneQ": "Tidak ada tukar piket", "sw.noneQSub": "Pengajuan tukar dari staf akan muncul di sini.",
+  // badges
+  "b.title": "Lencana", "b.streak": "Rekor Baja", "b.streakD": "7+ hari hadir sempurna",
+  "b.month": "Bulan Sempurna", "b.monthD": "Kehadiran 95%+ bulan ini", "b.ontime": "Raja Tepat Waktu",
+  "b.ontimeD": "Tanpa keterlambatan bulan ini", "b.champ": "Juara Piket", "b.champD": "Saldo 150+ poin",
+  "b.ot": "Mesin Lembur", "b.otD": "8+ jam lembur disetujui bulan ini",
+  // weather
+  "w.dock": "Cuaca dok", "w.clear": "Cerah", "w.partly": "Berawan sebagian", "w.cloudy": "Mendung",
+  "w.fog": "Berkabut", "w.rainL": "Hujan", "w.storm": "Badai", "w.rainHint": "Tutup kontainer terbuka",
+  "w.wind": "angin", "w.live": "live",
+  // profile sheet
+  "pf.install": "Pasang aplikasi", "pf.installHint": "Layar penuh & offline — atau menu browser → Tambah ke layar utama",
+  "pf.member": "Bergabung", "pf.quick": "Pengaturan cepat",
 };
 
 const dicts: Record<Lang, Record<TKey, string>> = { en, id };

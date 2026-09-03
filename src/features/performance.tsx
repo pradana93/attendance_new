@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, Award, CalendarDays, ChevronRight,
-  Clock3, Hourglass, Medal, Plane, Star, Target, TrendingUp,
+  Clock3, Flame, Hourglass, Medal, Plane, Star, Target, Timer, TrendingUp, Trophy,
 } from "lucide-react";
 import type { User } from "../types";
-import { getDB, leaderboard, statsFor, userName, type UserStats } from "../lib/store";
+import { getDB, leaderboard, otHours, statsFor, userName, type UserStats } from "../lib/store";
 import { dayKey, fmtDate, parseKey, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Chip, SectionTitle, Seg, Sheet } from "../components/ui";
@@ -71,6 +71,46 @@ function insightLines(user: User, st: UserStats, lang: "en" | "id"): string[] {
     out.push(`⭐ ${st.points} piket points banked. Redeem them in the Piket tab.`);
   }
   return out;
+}
+
+/* ================= achievement badges ================= */
+function Badges({ user, st }: { user: User; st: UserStats }) {
+  const db = getDB();
+  const t = useT();
+  if (!db) return null;
+  const month = todayKey().slice(0, 7);
+  const monthAtt = db.attendance.filter((a) => a.userId === user.id && a.date.startsWith(month) && a.checkIn);
+  const lateZero = monthAtt.length > 0 && monthAtt.every((a) => !a.late);
+  const otH = db.ot.filter((o) => o.userId === user.id && o.status === "approved" && o.date.startsWith(month))
+    .reduce((s, o) => s + otHours(o), 0);
+  const defs = [
+    { name: t("b.streak"), desc: t("b.streakD"), icon: Flame, cls: "text-amber border-amber/40 bg-amber/10", on: st.streak >= 7 },
+    { name: t("b.month"), desc: t("b.monthD"), icon: Award, cls: "text-ok border-ok/40 bg-ok/10", on: st.monthPct >= 95 },
+    { name: t("b.ontime"), desc: t("b.ontimeD"), icon: Clock3, cls: "text-cool border-cool/40 bg-cool/10", on: lateZero },
+    { name: t("b.champ"), desc: t("b.champD"), icon: Trophy, cls: "text-amber border-amber/40 bg-amber/10", on: user.points >= 150 },
+    { name: t("b.ot"), desc: t("b.otD"), icon: Timer, cls: "text-bad border-bad/40 bg-bad/10", on: otH >= 8 },
+  ];
+  const earned = defs.filter((d) => d.on).length;
+  return (
+    <div>
+      <SectionTitle right={<span className="font-mono text-[11px] text-faint">{earned}/{defs.length}</span>}>
+        <span className="inline-flex items-center gap-1.5"><Medal size={14} className="text-amber" /> {t("b.title")}</span>
+      </SectionTitle>
+      <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
+        {defs.map((d) => {
+          const Ic = d.icon;
+          return (
+            <div key={d.name}
+              className={`min-w-[150px] shrink-0 rounded-xl border p-3 transition-opacity ${d.on ? d.cls : "border-line2 bg-panel2/50 opacity-45 grayscale"}`}>
+              <Ic size={18} className={d.on ? "" : "text-faint"} />
+              <p className={`ttl mt-2 text-[13px] font-bold leading-tight ${d.on ? "text-ink" : "text-mut"}`}>{d.name}</p>
+              <p className="mt-0.5 font-mono text-[9.5px] leading-snug text-faint">{d.desc}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* ================= my stats ================= */
@@ -172,6 +212,9 @@ function MyStats({ user }: { user: User }) {
           ))}
         </div>
       </div>
+
+      {/* achievement badges — gamifies the points & punctuality system */}
+      <Badges user={user} st={st} />
 
       {/* mini podium */}
       {lb.length > 1 && (

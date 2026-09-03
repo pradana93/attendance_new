@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Home, Settings2, User as UserIcon } from "lucide-react";
+import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon } from "lucide-react";
 import type { User } from "./types";
-import { getDB, getSessionUser, hasWorkspace, initStore, markNotisRead, unreadCount, useDB } from "./lib/store";
-import { fmtClock, relTime } from "./lib/util";
+import { getDB, getSessionUser, hasWorkspace, initStore, logout, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
+import { fmtClock, fmtDate, relTime } from "./lib/util";
 import { useT } from "./lib/i18n";
-import { Avatar, LiveDot, Sheet, handleHardwareBack } from "./components/ui";
+import { APP_VERSION } from "./lib/store";
+import { Avatar, Btn, Chip, Confirm, LiveDot, Seg, Sheet, Toggle, handleHardwareBack, toast } from "./components/ui";
 import { ChangelogSheet } from "./lib/changelog";
 import SetupWizard from "./features/setup";
 import Login from "./features/auth";
@@ -16,6 +17,16 @@ import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
 
 initStore();
+
+/* capture the PWA install prompt so the profile sheet can offer "Install app" */
+type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+let deferredInstall: BIPEvent | null = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstall = e as BIPEvent;
+  });
+}
 
 type Tab = "home" | "piket" | "stats" | "ot" | "fifth";
 interface NavState { tab: Tab; sec: AdminSec }
@@ -76,6 +87,7 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
   const isAdmin = user.role !== "staff";
   const [nav, setNav] = useState<NavState>({ tab: "home", sec: "live" });
   const [bellOpen, setBellOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
   const navRef = useRef(nav);
   navRef.current = nav;
@@ -168,7 +180,9 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
               <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 font-mono text-[9px] font-bold text-[#191203]">{unread}</span>
             )}
           </button>
-          <Avatar user={user} size={32} />
+          <button onClick={() => setProfileOpen(true)} className="tap rounded-full" aria-label={t("m.profile")}>
+            <Avatar user={user} size={32} ring={false} />
+          </button>
         </div>
       </header>
 
@@ -223,7 +237,104 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
           )}
         </div>
       </Sheet>
+
+      <ProfileSheet user={user} open={profileOpen} onClose={() => setProfileOpen(false)} onChangelog={onChangelog} />
     </div>
+  );
+}
+
+/* =============== profile sheet — logout, changelog, prefs, install =============== */
+function ProfileSheet({ user, open, onClose, onChangelog }: { user: User; open: boolean; onClose: () => void; onChangelog: () => void }) {
+  const db = useDB();
+  const t = useT();
+  const [confirmOut, setConfirmOut] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  if (!db) return null;
+  const lang = db.settings.language;
+  const dark = db.settings.theme === "dark";
+
+  const doInstall = async () => {
+    if (!deferredInstall) return;
+    setInstalling(true);
+    try {
+      await deferredInstall.prompt();
+      const choice = await deferredInstall.userChoice;
+      toast(choice.outcome === "accepted" ? "Installing ShiftGate…" : "Install dismissed", choice.outcome === "accepted" ? "ok" : "info");
+      deferredInstall = null;
+    } finally {
+      setInstalling(false);
+      onClose();
+    }
+  };
+
+  return (
+    <>
+      <Sheet open={open} onClose={onClose} title={t("m.profile")}>
+        <div className="space-y-4">
+          {/* identity */}
+          <div className="card relative overflow-hidden p-4">
+            <div className="hazard absolute inset-x-0 top-0 h-1" />
+            <div className="flex items-center gap-3.5">
+              <Avatar user={user} size={56} ring />
+              <div className="min-w-0">
+                <p className="truncate text-[16px] font-semibold text-ink">{user.name}</p>
+                <p className="mt-0.5 font-mono text-[11px] text-faint">{user.employeeId} · {user.department}</p>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <Chip tone={user.role === "superadmin" ? "amber" : user.role === "admin" ? "cool" : "mut"}>{user.role}</Chip>
+                  <span className="font-mono text-[10px] text-faint">{t("pf.member")} {fmtDate(user.createdAt.slice(0, 10))}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* quick settings */}
+          <div className="card divide-y divide-line2">
+            <p className="ttl px-4 pt-3 text-[11px] font-bold uppercase tracking-wider text-faint">{t("pf.quick")}</p>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <p className="text-[13px] font-semibold text-ink">{t("a.lang")}</p>
+              <Seg small value={lang} onChange={(v) => updateSettings({ language: v })}
+                options={[{ id: "en", label: "EN" }, { id: "id", label: "ID" }]} />
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <p className="text-[13px] font-semibold text-ink">{t("a.night")}</p>
+              <Toggle on={dark} onChange={(v) => updateSettings({ theme: v ? "dark" : "light" })} />
+            </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Download size={15} className="shrink-0 text-cool" />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-ink">{t("pf.install")}</p>
+                  <p className="truncate font-mono text-[10px] text-faint">{t("pf.installHint")}</p>
+                </div>
+              </div>
+              {deferredInstall && (
+                <Btn variant="ghost" className="!px-3 !py-1.5 shrink-0 text-[12px]" busy={installing} onClick={doInstall}>
+                  <Download size={13} /> PWA
+                </Btn>
+              )}
+            </div>
+          </div>
+
+          {/* changelog */}
+          <button onClick={() => { onClose(); onChangelog(); }}
+            className="tap card flex w-full items-center justify-between p-3.5 text-left hover:border-amber/40">
+            <span className="flex items-center gap-2.5">
+              <History size={16} className="text-amber" />
+              <span className="text-[13px] font-semibold text-ink">Changelog</span>
+            </span>
+            <Chip tone="amber">v{APP_VERSION}</Chip>
+          </button>
+
+          {/* logout — visible for every role */}
+          <Btn variant="danger" className="w-full" onClick={() => setConfirmOut(true)}>
+            <LogOut size={16} /> {t("c.logout")}
+          </Btn>
+        </div>
+      </Sheet>
+
+      <Confirm open={confirmOut} onClose={() => setConfirmOut(false)} danger title={t("c.logoutQ")} body={t("c.logoutBody")}
+        yesLabel={t("c.logout")} onYes={() => { logout(); onClose(); }} />
+    </>
   );
 }
 
