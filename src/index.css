@@ -9,6 +9,9 @@
 
 /* ---------- leaflet schematic map (tile-free, offline-safe) ---------- */
 .leaflet-container {
+  /* CRITICAL: leaflet panes use z-index 200–1000 — isolate them so they
+     can never escape above the app's nav (z-50) or sheets (z-70+) */
+  isolation: isolate;
   background:
     linear-gradient(var(--line2) 1px, transparent 1px),
     linear-gradient(90deg, var(--line2) 1px, transparent 1px),
@@ -249,6 +252,34 @@ input[type="time"] {
   animation: blinkc 1.1s step-end infinite;
   color: var(--amber);
 }
+/* ---------- health-check hardening ---------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* iOS auto-zooms inputs with font-size < 16px — never on touch devices */
+@media (pointer: coarse) {
+  .inp, select.inp, textarea.inp { font-size: 16px; }
+}
+/* scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.5s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .a-rise, .a-drop, .a-pop, .a-fadein, .stagger > * { animation-duration: 0.001s; }
+}
+/* living cards */
+.card { transition: border-color 0.2s ease, box-shadow 0.25s ease; }
+.card:hover {
+  border-color: color-mix(in srgb, var(--amber) 32%, var(--line));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.16);
+}
+button, .tap { -webkit-tap-highlight-color: transparent; user-select: none; }
+
 .stagger > * { animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .stagger > *:nth-child(1) { animation-delay: 0.02s; }
 .stagger > *:nth-child(2) { animation-delay: 0.06s; }

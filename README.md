@@ -25,6 +25,8 @@ Open the app, complete the **first-run setup wizard**, then sign in.
 | Staff | `agus@nusalogistik.id` | `shift123` |
 | Staff (all others) | `*@nusalogistik.id` | `shift123` |
 
+**Admin extras (v1.5):** edit any account via the pencil icon on the Staff list (name, email, employee ID, department, role — Super Admin locked), and review every submitted proof photo in the **Photos** gallery section.
+
 > The Super Admin credential is **permanently fixed** and re-enforced on every load — setup creates the workspace around it.
 
 ## Feature map

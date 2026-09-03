@@ -46,7 +46,8 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-10">
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
+      <div className="m-auto w-full">
       <div className="a-drop mb-8 text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-line shadow-[0_10px_36px_rgba(0,0,0,0.45)]"
           style={{ background: `linear-gradient(135deg, hsl(${db?.settings.hue ?? 38} 70% 45%), hsl(${(db?.settings.hue ?? 38) + 30} 65% 28%))` }}>
@@ -113,6 +114,7 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
         <History size={12} /> v{VERSION} · changelog
       </button>
 
+      </div>
       <ForgotSheet open={forgotOpen} onClose={() => setForgotOpen(false)} />
     </div>
   );

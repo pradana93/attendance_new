@@ -10,7 +10,7 @@ import { completePiket, getDB, leaderboard, myPiketToday, punch, selfReport, sta
 import { fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
-import { Btn, Chip, LiveDot, SectionTitle, Sheet, toast } from "../components/ui";
+import { Btn, Chip, LiveDot, Reveal, SectionTitle, Sheet, toast, useCountUp } from "../components/ui";
 import { Spark } from "../components/charts";
 
 type Kind = "in" | "out" | "done";
@@ -41,6 +41,8 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
     return lb.length ? Math.round(lb.reduce((s, b) => s + b.stats.monthPct, 0) / lb.length) : 0;
   }, [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
   const inside = geo ? geo.dist <= (db?.settings.radius ?? 100) : null;
+  const ptsAnim = useCountUp(user.points);
+  const pctAnim = useCountUp(isAdmin ? teamAvg : stats?.monthPct ?? 0);
 
   useEffect(() => {
     const t1 = setInterval(() => setNow(new Date()), 1000);
@@ -152,7 +154,7 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
       <div className="grid grid-cols-5 gap-3">
         <button onClick={() => goTab("piket")} className="tap card col-span-2 p-3.5 text-left hover:border-amber/40">
           <Star size={15} className="text-amber" />
-          <p className="mt-2 font-mono text-[24px] font-semibold leading-none text-ink">{user.points}</p>
+          <p className="mt-2 font-mono text-[24px] font-semibold leading-none text-ink">{ptsAnim}</p>
           <p className="ttl mt-1 text-[11px] font-bold text-mut">{t("d.points")}</p>
         </button>
         <button onClick={() => goTab("stats")} className="tap card col-span-3 p-3.5 text-left hover:border-amber/40">
@@ -161,7 +163,7 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
             <span className="font-mono text-[10px] text-faint">{t("c.today").toLowerCase()} ±30d</span>
           </div>
           <div className="mt-2 flex items-end gap-3">
-            <p className="font-mono text-[24px] font-semibold leading-none text-ink">{isAdmin ? teamAvg : stats?.monthPct ?? 0}%</p>
+            <p className="font-mono text-[24px] font-semibold leading-none text-ink">{pctAnim}%</p>
             {!isAdmin && <div className="mb-0.5 flex-1 opacity-90"><Spark values={(stats?.weeks ?? [0, 0]).slice(-6)} height={30} /></div>}
           </div>
           <p className="ttl mt-1 text-[11px] font-bold text-mut">{isAdmin ? t("d.teamAvg") : t("d.attendMonth")}</p>
@@ -215,6 +217,7 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
       )}
 
       {/* announcements */}
+      <Reveal delay={60}>
       <div>
         <SectionTitle right={
           <button onClick={() => setAnnList(true)} className="tap font-mono text-[11px] text-amber">{t("c.all")} →</button>
@@ -235,6 +238,7 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
           ))}
         </div>
       </div>
+      </Reveal>
 
       {/* today detail */}
       {rec?.checkIn && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Camera, ImagePlus, RotateCcw, X } from "lucide-react";
-import { Btn, Sheet, toast, useBackHandler } from "./ui";
+import { Btn, Sheet, toast, useBackHandler, useScrollLock } from "./ui";
 
 /** Downscale an image file to a compact JPEG data URL (max 720px edge) */
 function fileToDataUrl(file: File): Promise<string> {
@@ -95,10 +96,11 @@ export function CaptureSheet({ open, onClose, onSave, title, required }: {
 /** Full-screen image viewer (admin evidence review) */
 export function Lightbox({ src, onClose, caption }: { src: string | null; onClose: () => void; caption?: string }) {
   useBackHandler(!!src, onClose);
+  useScrollLock(!!src);
   if (!src) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[85] flex flex-col bg-black/92 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <p className="ttl text-[13px] font-bold text-white/90">{caption ?? "Evidence photo"}</p>
         <button onClick={onClose} className="tap rounded-lg border border-white/20 bg-white/10 p-2 text-white" aria-label="Close">
           <X size={16} />
@@ -110,6 +112,7 @@ export function Lightbox({ src, onClose, caption }: { src: string | null; onClos
       <p className="pb-[max(env(safe-area-inset-bottom),14px)] text-center font-mono text-[10px] uppercase tracking-widest text-white/40">
         submitted by staff · stored with attendance record
       </p>
-    </div>
+    </div>,
+    document.body,
   );
 }
