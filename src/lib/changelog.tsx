@@ -17,6 +17,18 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "1.5.0", date: "2026-03-02", name: "UI/UX health check",
+    items: [
+      { tag: "fixed", text: "Overlay stacking rebuilt: every sheet, dialog, lightbox and toast now portals to the document root — nothing can render under the tab bar anymore." },
+      { tag: "fixed", text: "Leaflet map panes (z-index 200–1000) are now isolated and can no longer leak above the navigation or pop-ups." },
+      { tag: "fixed", text: "Hardware-back registry no longer consumes handlers destructively — repeated back presses behave correctly with stacked sheets." },
+      { tag: "new", text: "Admin → Photos: full evidence gallery of every piket proof and overtime photo with filters and full-screen review." },
+      { tag: "new", text: "Admin can now edit existing accounts: name, email, employee ID, department and role (Super Admin role locked)." },
+      { tag: "improved", text: "Scroll-reveal animations, count-up numbers on dashboard stats, card hover glow, sheet drag handle and body scroll-locking under overlays." },
+      { tag: "improved", text: "Mobile hardening: no more iOS auto-zoom on input focus, safe-area insets on toasts and lightbox, login screen no longer clips on short devices." },
+    ],
+  },
+  {
     version: "1.4.0", date: "2026-02-20", name: "Login, back navigation & changelog",
     items: [
       { tag: "security", text: "Password reset now routes through a Gmail SMTP relay (smtp.gmail.com:587, STARTTLS) with tokenized reset links." },

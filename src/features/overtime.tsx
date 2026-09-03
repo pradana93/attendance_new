@@ -6,7 +6,7 @@ import type { Overtime, User } from "../types";
 import { cancelOvertime, decideOvertime, getDB, otHours, submitOvertime, userName } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDR, fmtIDRFull, hoursBetween, relTime, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
-import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, toast } from "../components/ui";
+import { Avatar, Btn, Chip, Confirm, Empty, Field, Reveal, SectionTitle, Seg, Sheet, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
 
 const TONE: Record<Overtime["status"], "amber" | "ok" | "bad"> = { pending: "amber", approved: "ok", rejected: "bad" };
@@ -102,6 +102,7 @@ export default function Overtime({ user }: { user: User }) {
       </div>
 
       {/* list */}
+      <Reveal delay={50}>
       {list.length === 0 ? (
         <Empty icon={<History size={26} />} title={t("o.noOt")} sub={t("o.noOtSub")} />
       ) : (
@@ -133,6 +134,8 @@ export default function Overtime({ user }: { user: User }) {
           })}
         </div>
       )}
+
+      </Reveal>
 
       <NewRequest user={user} open={showNew} onClose={() => setShowNew(false)} />
 

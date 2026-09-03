@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import type { User } from "../types";
 
@@ -22,15 +23,16 @@ export function Toaster() {
   }, []);
   const Icon = (k: ToastMsg["kind"]) =>
     k === "ok" ? <CheckCircle2 size={17} className="text-ok shrink-0" /> : k === "err" ? <XCircle size={17} className="text-bad shrink-0" /> : <Info size={17} className="text-cool shrink-0" />;
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[90] flex flex-col items-center gap-2 px-4">
+  return createPortal(
+    <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),12px)] z-[90] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
         <div key={t.id} className="a-drop pointer-events-auto flex w-full max-w-sm items-center gap-2.5 rounded-xl border border-line bg-panel px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
           {Icon(t.kind)}
           <p className="text-[13px] font-medium leading-snug text-ink">{t.text}</p>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -148,18 +150,32 @@ export function Empty({ icon, title, sub }: { icon: ReactNode; title: string; su
   );
 }
 
+/* ---------------- scroll lock (overlays) ---------------- */
+let lockCount = 0;
+export function useScrollLock(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    lockCount++;
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      lockCount = Math.max(0, lockCount - 1);
+      if (lockCount === 0) document.documentElement.style.overflow = prev;
+    };
+  }, [active]);
+}
+
 /* ---------------- hardware back (Android) registry ---------------- */
-type BackHandler = () => boolean;
+type BackHandler = () => void;
 const backStack: BackHandler[] = [];
 export function pushBackHandler(h: BackHandler) { backStack.push(h); }
 export function removeBackHandler(h: BackHandler) { const i = backStack.indexOf(h); if (i >= 0) backStack.splice(i, 1); }
-/** Consume the top-most handler; returns true if a back press was handled */
+/** Peek the top-most handler (non-destructive) and invoke it */
 export function handleHardwareBack(): boolean {
-  while (backStack.length) {
-    const h = backStack.pop()!;
-    if (h()) return true;
-  }
-  return false;
+  const h = backStack[backStack.length - 1];
+  if (!h) return false;
+  h();
+  return true;
 }
 /** Register a back handler while `active` (sheets, dialogs) */
 export function useBackHandler(active: boolean, onBack: () => void) {
@@ -167,15 +183,60 @@ export function useBackHandler(active: boolean, onBack: () => void) {
   ref.current = onBack;
   useEffect(() => {
     if (!active) return;
-    const h: BackHandler = () => { ref.current(); return true; };
+    const h: BackHandler = () => ref.current();
     pushBackHandler(h);
     return () => removeBackHandler(h);
   }, [active]);
 }
 
+/* ---------------- scroll reveal ---------------- */
+export function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setInView(true); io.disconnect(); } },
+      { threshold: 0.06, rootMargin: "0px 0px -5% 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`reveal ${inView ? "in" : ""} ${className}`} style={delay ? { transitionDelay: `${delay}ms` } : undefined}>
+      {children}
+    </div>
+  );
+}
+
+/* ---------------- animated number ---------------- */
+export function useCountUp(target: number, dur = 750): number {
+  const [v, setV] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(target); prev.current = target; return; }
+    const from = prev.current;
+    prev.current = target;
+    if (from === target) { setV(target); return; }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(from + (target - from) * e));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, dur]);
+  return v;
+}
+
 /* ---------------- bottom sheet / modal ---------------- */
 export function Sheet({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; wide?: boolean }) {
   useBackHandler(open, onClose);
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
     const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -183,13 +244,14 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
     return () => window.removeEventListener("keydown", fn);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal>
       <button className="a-fadein absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} aria-label="Close" />
       <div className={`a-rise relative max-h-[92dvh] w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} overflow-hidden rounded-t-2xl border border-line bg-panel shadow-[0_-16px_60px_rgba(0,0,0,0.5)] sm:rounded-2xl`}>
         <div className="hazard h-1 w-full opacity-80" />
-        <div className="flex max-h-[91dvh] flex-col">
-          <div className="flex items-center justify-between px-5 pb-1 pt-4">
+        <div className="flex justify-center pt-1.5"><span className="h-1 w-10 rounded-full bg-line2" /></div>
+        <div className="flex max-h-[89dvh] flex-col">
+          <div className="flex items-center justify-between px-5 pb-1 pt-1.5">
             <h3 className="ttl text-lg font-bold text-ink">{title}</h3>
             <button onClick={onClose} className="tap rounded-lg border border-line bg-panel2 p-1.5 text-mut hover:text-ink" aria-label="Close sheet">
               <X size={15} />
@@ -198,7 +260,8 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
           <div className="no-scrollbar overflow-y-auto px-5 pb-[max(env(safe-area-inset-bottom),24px)] pt-2">{children}</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -206,8 +269,9 @@ export function Confirm({ open, onClose, onYes, title, body, yesLabel = "Confirm
   open: boolean; onClose: () => void; onYes: () => void; title: string; body: string; yesLabel?: string; danger?: boolean;
 }) {
   useBackHandler(open, onClose);
+  useScrollLock(open);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-5">
       <button className="a-fadein absolute inset-0 bg-black/60" onClick={onClose} aria-label="Cancel" />
       <div className="a-pop relative w-full max-w-xs rounded-2xl border border-line bg-panel p-5 shadow-2xl">
@@ -221,7 +285,8 @@ export function Confirm({ open, onClose, onYes, title, body, yesLabel = "Confirm
           <Btn variant={danger ? "danger" : "primary"} className="flex-1" onClick={() => { onYes(); onClose(); }}>{yesLabel}</Btn>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

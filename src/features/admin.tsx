@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, Check, ChevronDown, ChevronUp, Clock3, Cloud, Copy, Database, Globe, Loader2,
-  LogOut, MapPin, Megaphone, Moon, Plus, Radio, RefreshCw, ScanFace, Settings2, Sun,
-  Trash2, UserPlus, Users, X,
+  Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
+  Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus, Radio,
+  RefreshCw, ScanFace, Settings2, Sun, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import type { Lang, Role, User } from "../types";
 import {
   addAnnouncement, addStaff, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
   getDB, manualLog, rerunSetup, resetDemoData, reviewSelfReport, supabaseSQL, syncSupabase,
-  toggleActive, updateSettings, userName,
+  toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
-import { fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
+import { fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
+import { Lightbox } from "../components/capture";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "cloud" | "config";
 type Sec = AdminSec;
@@ -261,6 +262,135 @@ function StaffPanel({ admin }: { admin: User }) {
           <Btn className="w-full" busy={saving} onClick={save}><Plus size={15} /> {t("a.createAccount")}</Btn>
         </div>
       </Sheet>
+
+      <EditUserSheet user={editUser} onClose={() => setEditUser(null)} />
+    </div>
+  );
+}
+
+/* ---------------- edit existing account ---------------- */
+function EditUserSheet({ user, onClose }: { user: User | null; onClose: () => void }) {
+  const db = getDB();
+  const t = useT();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [empId, setEmpId] = useState("");
+  const [dept, setDept] = useState(DEPTS[0]);
+  const [role, setRole] = useState<Role>("staff");
+  useEffect(() => {
+    if (user) {
+      setName(user.name); setEmail(user.email); setEmpId(user.employeeId);
+      setDept(DEPTS.includes(user.department) ? user.department : DEPTS[0]);
+      setRole(user.role);
+    }
+  }, [user]);
+  if (!db) return null;
+  const isSuper = user?.role === "superadmin";
+  return (
+    <Sheet open={!!user} onClose={onClose} title={t("a.editUser")}>
+      {user && (
+        <div className="space-y-3.5">
+          <div className="card2 flex items-center gap-3 p-3">
+            <Avatar user={user} size={40} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-semibold text-ink">{user.name}</p>
+              <p className="font-mono text-[10.5px] text-faint">{t("m.member")} {user.createdAt} · {user.active ? t("a.active") : "inactive"}</p>
+            </div>
+            {isSuper && <Chip tone="amber"><Settings2 size={10} /> root</Chip>}
+          </div>
+          <Field label={t("a.fullName")}><input className="inp" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label={t("a.email")}><input className="inp" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSuper} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("a.empId")}><input className="inp font-mono" value={empId} onChange={(e) => setEmpId(e.target.value)} disabled={isSuper} /></Field>
+            <Field label={t("a.department")}>
+              <select className="inp" value={dept} onChange={(e) => setDept(e.target.value)}>
+                {DEPTS.map((d) => <option key={d}>{d}</option>)}
+                {!DEPTS.includes(user.department) && <option>{user.department}</option>}
+              </select>
+            </Field>
+          </div>
+          <Field label={t("a.role")} hint={isSuper ? t("a.superLocked") : undefined}>
+            <div className="flex gap-2">
+              {(["staff", "admin"] as Role[]).map((r) => (
+                <button key={r} disabled={isSuper} onClick={() => setRole(r)}
+                  className={`tap ttl flex-1 rounded-lg border px-2 py-2 text-[12.5px] font-bold disabled:opacity-35 ${role === r ? "border-amber/60 bg-amber/12 text-amber" : "border-line bg-panel2 text-mut"}`}>{r}</button>
+              ))}
+            </div>
+          </Field>
+          <Btn className="w-full" onClick={() => {
+            const res = updateUser(user.id, { name, email, employeeId: empId, role: isSuper ? "superadmin" : role, department: dept });
+            if (!res.ok) { toast(res.msg, "err"); return; }
+            toast(res.msg, "ok");
+            onClose();
+          }}><Check size={15} /> {t("a.updateUser")}</Btn>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/* ---------------- evidence photo gallery ---------------- */
+type Evidence = { id: string; src: string; kind: "piket" | "ot"; who: string; label: string; date: string; time: string };
+
+function PhotosPanel() {
+  const db = getDB();
+  const t = useT();
+  const [filter, setFilter] = useState<"all" | "piket" | "ot">("all");
+  const [view, setView] = useState<Evidence | null>(null);
+
+  const ev = useMemo<Evidence[]>(() => {
+    if (!db) return [];
+    const pik: Evidence[] = db.piketLog.filter((l) => l.proof).map((l) => {
+      const task = db.tasks.find((x) => x.id === l.taskId);
+      return { id: "p-" + l.id, src: l.proof!, kind: "piket", who: userName(l.userId), label: task?.name ?? "Piket", date: l.date, time: fmtTime(l.doneAt) };
+    });
+    const ots: Evidence[] = db.ot.filter((o) => o.photo).map((o) => ({
+      id: "o-" + o.id, src: o.photo!, kind: "ot", who: userName(o.userId), label: t("o.title"), date: o.date, time: o.start,
+    }));
+    return [...pik, ...ots].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  }, [db, t]);
+
+  if (!db) return null;
+  const list = ev.filter((e) => filter === "all" || e.kind === filter);
+
+  return (
+    <div className="a-fadein space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="ttl text-[15px] font-bold text-ink">{t("a.photoGallery")}</p>
+          <p className="font-mono text-[10.5px] text-faint">{ev.length} {t("a.photos").toLowerCase()} · {t("a.photoHint")}</p>
+        </div>
+        <Seg small value={filter} onChange={setFilter} options={[
+          { id: "all", label: t("a.galleryAll") }, { id: "piket", label: t("a.galleryPiket") }, { id: "ot", label: t("a.galleryOt") },
+        ]} />
+      </div>
+
+      {list.length === 0 ? (
+        <Empty icon={<ImageIcon size={26} />} title={t("a.noPhotos")} sub={t("a.noPhotosSub")} />
+      ) : (
+        <div className="columns-2 gap-2.5">
+          {list.map((e) => (
+            <button key={e.id} onClick={() => setView(e)}
+              className="tap group relative mb-2.5 block w-full break-inside-avoid overflow-hidden rounded-xl border border-line bg-panel2 text-left">
+              <img src={e.src} alt={e.label} loading="lazy"
+                className="w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                style={{ aspectRatio: e.kind === "piket" ? "4/3" : "16/10" }} />
+              <span className="absolute left-2 top-2">
+                <Chip tone={e.kind === "piket" ? "amber" : "cool"}>
+                  {e.kind === "piket" ? <ClipboardList size={10} /> : <Clock3 size={10} />} {t(e.kind === "piket" ? "a.galleryPiket" : "a.galleryOt")}
+                </Chip>
+              </span>
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2.5 pb-2 pt-6">
+                <span className="block truncate text-[11.5px] font-semibold text-white">{e.label}</span>
+                <span className="block truncate font-mono text-[9.5px] text-white/65">{e.who} · {fmtDate(e.date)} {e.time}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Lightbox src={view?.src ?? null} onClose={() => setView(null)}
+        caption={view ? `${view.label} · ${view.who} · ${fmtDate(view.date)} ${view.time}` : undefined} />
     </div>
   );
 }
