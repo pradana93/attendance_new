@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import {
-  Banknote, CalendarPlus, Check, Clock3, Download, Filter, History, Search, Timer, X,
+  Banknote, CalendarPlus, Camera, Check, Clock3, Download, Filter, History, Search, Timer, X,
 } from "lucide-react";
 import type { Overtime, User } from "../types";
 import { cancelOvertime, decideOvertime, getDB, otHours, submitOvertime, userName } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDR, fmtIDRFull, hoursBetween, relTime, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, toast } from "../components/ui";
+import { CaptureSheet, Lightbox } from "../components/capture";
 
 const TONE: Record<Overtime["status"], "amber" | "ok" | "bad"> = { pending: "amber", approved: "ok", rejected: "bad" };
 
@@ -22,6 +23,7 @@ export default function Overtime({ user }: { user: User }) {
   const [deciding, setDeciding] = useState<{ id: string; approve: boolean } | null>(null);
   const [note, setNote] = useState("");
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [viewPhoto, setViewPhoto] = useState<{ src: string; caption: string } | null>(null);
 
   const month = todayKey().slice(0, 7);
   const approvedMonth = useMemo(() => (db?.ot ?? []).filter((o) => o.status === "approved" && o.date.startsWith(month)), [db, month]);
@@ -116,8 +118,9 @@ export default function Overtime({ user }: { user: User }) {
                       <p className="font-mono text-[13.5px] font-semibold text-ink">{fmtDate(o.date)}</p>
                       <Chip tone={TONE[o.status]}>{o.status}</Chip>
                     </div>
-                    <p className="mt-0.5 truncate text-[12px] text-mut">
-                      {isAdmin && scope === "all" ? `${userName(o.userId)} · ` : ""}{o.start}–{o.end} · {h}h · {o.reason}
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-mut">
+                      <span className="truncate">{isAdmin && scope === "all" ? `${userName(o.userId)} · ` : ""}{o.start}–{o.end} · {h}h · {o.reason}</span>
+                      {o.photo && <Camera size={11} className="shrink-0 text-cool" />}
                     </p>
                   </div>
                   <div className="text-right">
@@ -145,6 +148,16 @@ export default function Overtime({ user }: { user: User }) {
                   <Chip tone={TONE[detailRow.status]}>{detailRow.status}</Chip>
                 </div>
                 <p className="text-[13px] text-mut">{detailRow.reason}</p>
+                {detailRow.photo && (
+                  <button onClick={() => setViewPhoto({ src: detailRow.photo!, caption: `${t("o.title")} · ${fmtDate(detailRow.date)} · ${userName(detailRow.userId)}` })}
+                    className="tap flex w-full items-center gap-3 rounded-lg border border-line bg-panel p-2 text-left hover:border-amber/50">
+                    <img src={detailRow.photo} alt="" className="h-14 w-[76px] rounded-md border border-line object-cover" />
+                    <div>
+                      <p className="ttl text-[12px] font-bold text-ink">{t("a.photo")} · {t("c.optional")}</p>
+                      <p className="font-mono text-[10.5px] text-faint">tap to view full size</p>
+                    </div>
+                  </button>
+                )}
                 <div className="flex items-center justify-between border-t border-line2 pt-2 font-mono text-[12px]">
                   <span className="text-faint">{userName(detailRow.userId)} · {h}h</span>
                   <span className="text-ok">{fmtIDRFull(h * rate)}</span>
@@ -201,6 +214,8 @@ export default function Overtime({ user }: { user: User }) {
       <Confirm open={!!cancelId} onClose={() => setCancelId(null)} danger title={t("o.cancelReq") + "?"}
         body="The pending request will be removed." yesLabel={t("c.cancel")}
         onYes={() => { if (cancelId) { cancelOvertime(cancelId); toast("Request cancelled", "info"); setDetail(null); } }} />
+
+      <Lightbox src={viewPhoto?.src ?? null} onClose={() => setViewPhoto(null)} caption={viewPhoto?.caption} />
     </div>
   );
 }
@@ -229,6 +244,8 @@ function NewRequest({ user, open, onClose }: { user: User; open: boolean; onClos
   const [end, setEnd] = useState("19:00");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
   if (!db) return null;
   const h = hoursBetween(start, end);
   const overlap = db.ot.some((o) => o.userId === user.id && o.date === date && o.status !== "rejected" && !(end <= o.start || start >= o.end));
@@ -243,6 +260,21 @@ function NewRequest({ user, open, onClose }: { user: User; open: boolean; onClos
           <Field label={t("o.end")}><input className="inp font-mono" type="time" value={end} onChange={(e) => e.target.value && setEnd(e.target.value)} /></Field>
         </div>
         <Field label={t("o.reason")}><textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Container unloading overflow…" /></Field>
+
+        {/* supporting photo (optional) */}
+        <button onClick={() => setCapturing(true)}
+          className={`tap flex w-full items-center gap-3 rounded-xl border p-2.5 text-left ${photo ? "border-ok/40 bg-ok/6" : "border-dashed border-line bg-panel2/50 hover:border-amber/50"}`}>
+          {photo ? (
+            <img src={photo} alt="" className="h-12 w-16 rounded-lg border border-line object-cover" />
+          ) : (
+            <span className="flex h-12 w-16 items-center justify-center rounded-lg border border-line bg-panel text-faint"><Camera size={17} /></span>
+          )}
+          <div className="flex-1">
+            <p className="ttl text-[12.5px] font-bold text-ink">{photo ? "Supporting photo attached" : "Attach supporting photo"}</p>
+            <p className="font-mono text-[10.5px] text-faint">{photo ? "tap to replace · visible to admin" : `${t("c.optional")} · visible to admin`}</p>
+          </div>
+          <Chip tone={photo ? "ok" : "mut"}>{photo ? "✓" : "＋"}</Chip>
+        </button>
 
         <div className="card2 flex items-center justify-between px-3.5 py-3">
           <div>
@@ -262,15 +294,16 @@ function NewRequest({ user, open, onClose }: { user: User; open: boolean; onClos
         <Btn className="w-full" busy={busy} disabled={h <= 0 || overlap || !reason.trim()} onClick={() => {
           setBusy(true);
           setTimeout(() => {
-            const res = submitOvertime(user.id, date, start, end, reason.trim());
+            const res = submitOvertime(user.id, date, start, end, reason.trim(), photo ?? undefined);
             setBusy(false);
-            if (res.ok) { toast(res.msg, "ok"); setReason(""); onClose(); }
+            if (res.ok) { toast(res.msg, "ok"); setReason(""); setPhoto(null); onClose(); }
             else toast(res.msg, "err");
           }, 500);
         }}>
           <CalendarPlus size={15} /> {t("m.submit")}
         </Btn>
       </div>
+      <CaptureSheet open={capturing} onClose={() => setCapturing(false)} title={t("o.newRequest")} onSave={setPhoto} />
     </Sheet>
   );
 }

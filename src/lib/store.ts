@@ -41,6 +41,25 @@ function mkUser(id: string, name: string, email: string, role: Role, employeeId:
   return { id, name, email, password, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
 }
 
+/** Compact SVG "evidence photo" used to seed the gallery without bloating localStorage */
+function svgPhoto(label: string, date: string): string {
+  const h = (label.length * 7 + date.length * 13) % 360;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'>
+<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+<stop offset='0' stop-color='hsl(${h} 24% 24%)'/><stop offset='1' stop-color='hsl(${h} 30% 12%)'/>
+</linearGradient></defs>
+<rect width='640' height='420' fill='url(#g)'/>
+<g stroke='hsl(${h} 20% 34%)' stroke-width='2' opacity='0.55'>
+<rect x='60' y='150' width='120' height='90'/><rect x='200' y='120' width='120' height='120'/><rect x='340' y='160' width='140' height='80'/><rect x='500' y='130' width='90' height='110'/>
+<rect x='120' y='60' width='100' height='70'/><rect x='400' y='70' width='110' height='70'/></g>
+<rect x='0' y='330' width='640' height='90' fill='hsl(40 90% 50%)' opacity='0.92'/>
+<text x='24' y='372' font-family='monospace' font-size='26' font-weight='bold' fill='#191203'>${label}</text>
+<text x='24' y='402' font-family='monospace' font-size='17' fill='#3d2e03'>BUKTI PIKET · ${date} · GUDANG WH-01</text>
+<circle cx='596' cy='44' r='10' fill='#ff5c5c'/><text x='560' y='50' font-family='monospace' font-size='16' fill='#ffd7d7' text-anchor='end'>REC</text>
+</svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
 function seed(): DB {
   const users: User[] = [
     mkUser("u-admin", "Budi Santoso", "budi@nusalogistik.id", "superadmin", "WMS-001", "Operations", 210),
@@ -119,7 +138,7 @@ function seed(): DB {
       const task = tasks.find((x) => x.id === a.taskId)!;
       const p = isToday ? 0.35 : 0.78;
       if (rng() < p) {
-        piketLog.push({ id: uid(), date: k, taskId: task.id, userId: a.userId, doneAt: k + "T17:30:00", proof: task.requiresProof, points: task.points });
+        piketLog.push({ id: uid(), date: k, taskId: task.id, userId: a.userId, doneAt: k + "T17:30:00", proof: task.requiresProof ? svgPhoto(task.name, k) : undefined, points: task.points });
         pointEvents.push({ id: uid(), userId: a.userId, date: k, delta: task.points, label: `${task.name} piket` });
       }
     }
@@ -398,7 +417,7 @@ export const piketForDate = (date: string): { task: PiketTask; assign: PiketAssi
 
 export const myPiketToday = (userId: string) => piketForDate(todayKey()).filter((r) => r.assign.userId === userId);
 
-export function completePiket(date: string, taskId: string, userId: string, proof: boolean): { ok: boolean; msg: string; points: number } {
+export function completePiket(date: string, taskId: string, userId: string, proof?: string): { ok: boolean; msg: string; points: number } {
   if (!cache) return { ok: false, msg: "Store not ready", points: 0 };
   const task = cache.tasks.find((t) => t.id === taskId);
   if (!task) return { ok: false, msg: "Task not found", points: 0 };
@@ -456,12 +475,12 @@ export function otHours(o: Overtime) {
   return Math.max(0, hoursBetween(o.start, o.end));
 }
 
-export function submitOvertime(userId: string, date: string, start: string, end: string, reason: string): { ok: boolean; msg: string } {
+export function submitOvertime(userId: string, date: string, start: string, end: string, reason: string, photo?: string): { ok: boolean; msg: string } {
   if (!cache) return { ok: false, msg: "Store not ready" };
   if (hoursBetween(start, end) <= 0) return { ok: false, msg: "End time must be after start time." };
   if (cache.ot.some((o) => o.userId === userId && o.date === date && o.status !== "rejected" && !(end <= o.start || start >= o.end)))
     return { ok: false, msg: "Overlaps an existing request on this date." };
-  cache.ot.unshift({ id: uid(), userId, date, start, end, reason, status: "pending", createdAt: new Date().toISOString() });
+  cache.ot.unshift({ id: uid(), userId, date, start, end, reason, status: "pending", photo, createdAt: new Date().toISOString() });
   cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Overtime request", `${userName(userId)} · ${fmtDate(date)} · ${hoursBetween(start, end)}h`));
   mutate();
   return { ok: true, msg: "Request submitted for approval." };
@@ -556,6 +575,33 @@ export function addStaff(input: { name: string; email: string; employeeId: strin
 export function toggleActive(userId: string) {
   const u = userById(userId); if (!u) return;
   u.active = !u.active; mutate();
+}
+
+/** Edit an existing account (admin/super admin only). Super Admin role is locked. */
+export function updateUser(userId: string, patch: { name: string; email: string; employeeId: string; role: Role; department: string }): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  const u = userById(userId);
+  if (!u) return { ok: false, msg: "Account not found." };
+  if (!patch.name.trim()) return { ok: false, msg: "Name is required." };
+  if (!patch.email.includes("@")) return { ok: false, msg: "Valid email required." };
+  if (!patch.employeeId.trim()) return { ok: false, msg: "Employee ID is required." };
+  if (cache.users.some((x) => x.id !== userId && x.email.toLowerCase() === patch.email.toLowerCase()))
+    return { ok: false, msg: "Email is already used by another account." };
+  if (cache.users.some((x) => x.id !== userId && x.employeeId === patch.employeeId.trim()))
+    return { ok: false, msg: "Employee ID is already taken." };
+  if (u.role === "superadmin" && patch.role !== "superadmin")
+    return { ok: false, msg: "The Super Admin role cannot be changed." };
+  if (u.role !== "superadmin" && patch.role === "superadmin")
+    return { ok: false, msg: "Super Admin accounts can only be created during setup." };
+  const oldName = u.name;
+  u.name = patch.name.trim();
+  u.email = patch.email.trim();
+  u.employeeId = patch.employeeId.trim();
+  u.role = patch.role;
+  u.department = patch.department;
+  pushNotif(userId, "Profile updated", `Your account details were changed by an admin${oldName !== u.name ? ` (now ${u.name})` : ""}.`);
+  mutate();
+  return { ok: true, msg: `${u.name}'s account updated.` };
 }
 
 export function enrollFace(userId: string) {
