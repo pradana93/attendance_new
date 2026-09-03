@@ -14,13 +14,14 @@ import { fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 
-type Sec = "live" | "staff" | "notice" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "cloud" | "config";
+type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
-export default function Admin({ user }: { user: User }) {
+export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSec: (s: Sec) => void }) {
   const db = getDB();
   const t = useT();
-  const [sec, setSec] = useState<Sec>("live");
+  const setSec = onSec;
   if (!db) return null;
   return (
     <div className="space-y-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import type { User } from "../types";
 
@@ -148,8 +148,34 @@ export function Empty({ icon, title, sub }: { icon: ReactNode; title: string; su
   );
 }
 
+/* ---------------- hardware back (Android) registry ---------------- */
+type BackHandler = () => boolean;
+const backStack: BackHandler[] = [];
+export function pushBackHandler(h: BackHandler) { backStack.push(h); }
+export function removeBackHandler(h: BackHandler) { const i = backStack.indexOf(h); if (i >= 0) backStack.splice(i, 1); }
+/** Consume the top-most handler; returns true if a back press was handled */
+export function handleHardwareBack(): boolean {
+  while (backStack.length) {
+    const h = backStack.pop()!;
+    if (h()) return true;
+  }
+  return false;
+}
+/** Register a back handler while `active` (sheets, dialogs) */
+export function useBackHandler(active: boolean, onBack: () => void) {
+  const ref = useRef(onBack);
+  ref.current = onBack;
+  useEffect(() => {
+    if (!active) return;
+    const h: BackHandler = () => { ref.current(); return true; };
+    pushBackHandler(h);
+    return () => removeBackHandler(h);
+  }, [active]);
+}
+
 /* ---------------- bottom sheet / modal ---------------- */
 export function Sheet({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; wide?: boolean }) {
+  useBackHandler(open, onClose);
   useEffect(() => {
     if (!open) return;
     const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -169,7 +195,7 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
               <X size={15} />
             </button>
           </div>
-          <div className="no-scrollbar overflow-y-auto px-5 pb-6 pt-2">{children}</div>
+          <div className="no-scrollbar overflow-y-auto px-5 pb-[max(env(safe-area-inset-bottom),24px)] pt-2">{children}</div>
         </div>
       </div>
     </div>
@@ -179,6 +205,7 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
 export function Confirm({ open, onClose, onYes, title, body, yesLabel = "Confirm", danger }: {
   open: boolean; onClose: () => void; onYes: () => void; title: string; body: string; yesLabel?: string; danger?: boolean;
 }) {
+  useBackHandler(open, onClose);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-5">

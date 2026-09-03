@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* ---------- bottom tab bar clearance (mobile safe areas) ---------- */
+:root { --nav-h: 62px; }
+.app-main {
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 20px);
+}
+
 /* ---------- leaflet schematic map (tile-free, offline-safe) ---------- */
 .leaflet-container {
   background:
