@@ -1,27 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Bell, Boxes, CalendarDays, Home, Settings2, User as UserIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Home, Settings2, User as UserIcon } from "lucide-react";
 import type { User } from "./types";
 import { getDB, getSessionUser, hasWorkspace, initStore, markNotisRead, unreadCount, useDB } from "./lib/store";
 import { fmtClock, relTime } from "./lib/util";
 import { useT } from "./lib/i18n";
-import { Avatar, LiveDot, Sheet } from "./components/ui";
+import { Avatar, LiveDot, Sheet, handleHardwareBack } from "./components/ui";
+import { ChangelogSheet } from "./lib/changelog";
 import SetupWizard from "./features/setup";
 import Login from "./features/auth";
 import Dashboard from "./features/dashboard";
 import Schedule from "./features/schedule";
 import Performance from "./features/performance";
 import Overtime from "./features/overtime";
-import Admin from "./features/admin";
+import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
 
 initStore();
 
 type Tab = "home" | "piket" | "stats" | "ot" | "fifth";
+interface NavState { tab: Tab; sec: AdminSec }
+const navUrl = (s: NavState) => `#/${s.tab}${s.sec !== "live" ? "/" + s.sec : ""}`;
 
 export default function App() {
   const db = useDB();
   const [booting, setBooting] = useState(true);
   const [sessionTick, setSessionTick] = useState(0);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setBooting(false), 950);
     return () => clearTimeout(t);
@@ -32,8 +36,19 @@ export default function App() {
   if (booting) return <Splash />;
   if (!db) return null;
   if (!hasWorkspace()) return <SetupWizard />;
-  if (!cur) return <Login onLogin={() => setSessionTick((t) => t + 1)} />;
-  return <Shell user={cur} />;
+  if (!cur)
+    return (
+      <>
+        <Login onLogin={() => setSessionTick((t) => t + 1)} onChangelog={() => setChangelogOpen(true)} />
+        <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      </>
+    );
+  return (
+    <>
+      <Shell user={cur} onChangelog={() => setChangelogOpen(true)} />
+      <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+    </>
+  );
 }
 
 function Splash() {
@@ -55,17 +70,60 @@ function Splash() {
   );
 }
 
-function Shell({ user }: { user: User }) {
+function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
   const db = useDB();
   const t = useT();
   const isAdmin = user.role !== "staff";
-  const [tab, setTab] = useState<Tab>("home");
+  const [nav, setNav] = useState<NavState>({ tab: "home", sec: "live" });
   const [bellOpen, setBellOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const navRef = useRef(nav);
+  navRef.current = nav;
+
+  const { tab, sec: adminSec } = nav;
+
   useEffect(() => {
     const iv = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(iv);
   }, []);
+
+  /* ---- history-based back navigation (Android hardware back) ---- */
+  useEffect(() => {
+    window.history.replaceState(navRef.current, "", navUrl(navRef.current));
+    const onPop = (e: PopStateEvent) => {
+      // 1) an open sheet/dialog gets the back press first
+      if (handleHardwareBack()) {
+        window.history.pushState(navRef.current, "", navUrl(navRef.current));
+        return;
+      }
+      // 2) otherwise step back through tabs / admin sections
+      const st = (e.state ?? {}) as Partial<NavState>;
+      const next: NavState = {
+        tab: (["home", "piket", "stats", "ot", "fifth"] as Tab[]).includes(st.tab as Tab) ? (st.tab as Tab) : "home",
+        sec: (["live", "staff", "notice", "cloud", "config"] as AdminSec[]).includes(st.sec as AdminSec) ? (st.sec as AdminSec) : "live",
+      };
+      setNav(next);
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const goTab = (tb: Tab) => {
+    const next: NavState = { tab: tb, sec: "live" };
+    setNav(next);
+    window.history.pushState(next, "", navUrl(next));
+    window.scrollTo({ top: 0 });
+  };
+  const goAdminSec = (s: AdminSec) => {
+    const next: NavState = { tab: "fifth", sec: s };
+    setNav(next);
+    window.history.pushState(next, "", navUrl(next));
+    window.scrollTo({ top: 0 });
+  };
+  const goBack = () => window.history.back();
+  const canGoBack = tab !== "home" || adminSec !== "live";
+
   if (!db) return null;
   const unread = unreadCount(user.id);
 
@@ -82,18 +140,27 @@ function Shell({ user }: { user: User }) {
       {/* header */}
       <header className="sticky top-0 z-50 border-b border-line/70 bg-bg/85 backdrop-blur-md">
         <div className="hazard h-[3px] w-full opacity-90" />
-        <div className="flex items-center gap-3 px-4 py-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-line"
-            style={{ background: `linear-gradient(135deg, hsl(${db.settings.hue} 70% 45%), hsl(${db.settings.hue + 30} 65% 28%))` }}>
-            {db.settings.logo ? <img src={db.settings.logo} alt="" className="h-full w-full object-cover" /> : <Boxes size={18} className="text-white" />}
-          </div>
+        <div className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4">
+          {canGoBack ? (
+            <button onClick={goBack}
+              className="tap -ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-amber/40 bg-amber/10 text-amber hover:bg-amber/20"
+              aria-label={t("c.back")}>
+              <ChevronLeft size={18} />
+            </button>
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-line"
+              style={{ background: `linear-gradient(135deg, hsl(${db.settings.hue} 70% 45%), hsl(${db.settings.hue + 30} 65% 28%))` }}>
+              {db.settings.logo ? <img src={db.settings.logo} alt="" className="h-full w-full object-cover" /> : <Boxes size={18} className="text-white" />}
+            </div>
+          )}
           <div className="min-w-0 flex-1 leading-tight">
             <p className="ttl truncate text-[15px] font-bold text-ink">{db.settings.appName}</p>
             <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-wider text-faint">
               <LiveDot /> {db.settings.siteName}
+              {tab === "fifth" && adminSec !== "live" && <span className="text-amber">· {adminSec}</span>}
             </p>
           </div>
-          <span className="font-mono text-[11.5px] tabular-nums text-mut">{fmtClock(clock)}</span>
+          <span className="hidden font-mono text-[11.5px] tabular-nums text-mut min-[380px]:inline">{fmtClock(clock)}</span>
           <button onClick={() => { setBellOpen(true); markNotisRead(user.id); }}
             className="tap relative rounded-[10px] border border-line bg-panel2 p-2 text-mut hover:text-ink" aria-label={t("c.notifications")}>
             <Bell size={16} />
@@ -105,14 +172,14 @@ function Shell({ user }: { user: User }) {
         </div>
       </header>
 
-      {/* page */}
-      <main className="px-4 pb-28 pt-4">
-        <div key={tab} className="a-fadein">
-          {tab === "home" && <Dashboard user={user} goTab={(x) => setTab(x as Tab)} />}
+      {/* page — bottom padding clears the fixed tab bar + device safe area */}
+      <main className="app-main px-4 pt-4">
+        <div key={tab + adminSec} className="a-fadein">
+          {tab === "home" && <Dashboard user={user} goTab={(x) => goTab(x as Tab)} />}
           {tab === "piket" && <Schedule user={user} />}
           {tab === "stats" && <Performance user={user} />}
           {tab === "ot" && <Overtime user={user} />}
-          {tab === "fifth" && (isAdmin ? <Admin user={user} /> : <Me user={user} />)}
+          {tab === "fifth" && (isAdmin ? <Admin user={user} sec={adminSec} onSec={goAdminSec} /> : <Me user={user} onChangelog={onChangelog} />)}
         </div>
       </main>
 
@@ -124,7 +191,7 @@ function Shell({ user }: { user: User }) {
               const Ic = tb.icon;
               const active = tab === tb.id;
               return (
-                <button key={tb.id} onClick={() => setTab(tb.id)}
+                <button key={tb.id} onClick={() => goTab(tb.id)}
                   className={`tap relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 ${active ? "text-amber" : "text-faint hover:text-mut"}`}>
                   <span className={`absolute -top-1.5 h-[3px] w-7 rounded-full bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
                   <Ic size={20} className={active ? "drop-shadow-[0_0_8px_rgba(255,178,36,0.5)]" : ""} />

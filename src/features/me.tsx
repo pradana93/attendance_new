@@ -1,14 +1,15 @@
 import { useState } from "react";
 import {
-  Bell, CalendarOff, Cloud, Database, Globe, LogOut, Moon, Plane, Sun, UserCircle2,
+  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2,
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { VERSION } from "../lib/changelog";
 import { Avatar, Btn, Chip, Confirm, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 
-export default function Me({ user }: { user: User }) {
+export default function Me({ user, onChangelog }: { user: User; onChangelog: () => void }) {
   const db = getDB();
   const t = useT();
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -98,6 +99,18 @@ export default function Me({ user }: { user: User }) {
           <Chip tone={s.supabase.status === "connected" ? "cool" : "mut"}>{s.supabase.status === "connected" ? "online" : "local"}</Chip>
         </div>
       </div>
+
+      {/* changelog */}
+      <button onClick={onChangelog} className="tap card flex w-full items-center justify-between p-4 text-left hover:border-amber/40">
+        <div className="flex items-center gap-2.5">
+          <History size={16} className="text-amber" />
+          <div>
+            <p className="text-[13px] font-semibold text-ink">Changelog</p>
+            <p className="font-mono text-[10.5px] text-faint">release history · what's new</p>
+          </div>
+        </div>
+        <Chip tone="amber">v{VERSION}</Chip>
+      </button>
 
       {/* session */}
       <div className="card p-4">
