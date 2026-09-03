@@ -26,8 +26,8 @@ export default function Login({ onLogin }: { onLogin: (u: User) => void }) {
     setTimeout(() => {
       const res = login(email, pw, remember);
       setBusy(false);
-      if (res.error || !res.user) {
-        setErr(res.error ?? "Sign-in failed");
+      if (!res.ok || !res.user) {
+        setErr(res.msg ?? "Sign-in failed");
         setShake((s) => s + 1);
         return;
       }

@@ -127,6 +127,17 @@ export function locateWithFallback(
 /* ---------------- misc ---------------- */
 export const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Indonesian Rupiah formatting */
+export function fmtIDR(n: number): string {
+  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} jt`;
+  if (n >= 1_000) return `Rp ${Math.round(n / 1_000)} rb`;
+  return `Rp ${n}`;
+}
+
+export function fmtIDRFull(n: number): string {
+  return "Rp " + Math.round(n).toLocaleString("id-ID");
+}
+
 export function downloadCSV(filename: string, rows: (string | number)[][]) {
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });

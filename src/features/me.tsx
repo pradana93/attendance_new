@@ -1,153 +1,142 @@
 import { useState } from "react";
-import { CalendarOff, ChevronRight, Gift, LogOut, Moon, Send, Star, Sun } from "lucide-react";
-import type { User } from "../types";
-import { getDB, requestLeave, updateSettings, logout } from "../lib/store";
+import {
+  Bell, CalendarOff, Cloud, Database, Globe, LogOut, Moon, Plane, Sun, UserCircle2,
+} from "lucide-react";
+import type { Lang, User } from "../types";
+import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
-import { Avatar, Btn, Chip, Field, SectionTitle, Sheet, Toggle, toast } from "../components/ui";
+import { useT } from "../lib/i18n";
+import { Avatar, Btn, Chip, Confirm, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 
-const ALLOWANCE = 12;
-
-export default function Me({ user, onLogout }: { user: User; onLogout: () => void }) {
+export default function Me({ user }: { user: User }) {
   const db = getDB();
-  const [showLeave, setShowLeave] = useState(false);
-  const [from, setFrom] = useState(todayKey());
-  const [to, setTo] = useState(todayKey());
+  const t = useT();
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [date, setDate] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
   if (!db) return null;
-
-  const approvedDays = db.leaves
-    .filter((l) => l.userId === user.id && l.status === "approved")
-    .reduce((s, l) => s + Math.max(1, Math.round((new Date(l.to).getTime() - new Date(l.from).getTime()) / 864e5) + 1), 0);
-  const remaining = Math.max(0, ALLOWANCE - approvedDays);
-  const myLeaves = db.leaves.filter((l) => l.userId === user.id);
-
-  const submit = () => {
-    if (!reason.trim()) { toast("A reason is required", "err"); return; }
-    if (to < from) { toast("End date before start date", "err"); return; }
-    setBusy(true);
-    setTimeout(() => {
-      requestLeave({ userId: user.id, from, to, reason: reason.trim() });
-      setBusy(false);
-      setShowLeave(false);
-      setReason("");
-      toast("Leave request sent to admin for approval", "ok");
-    }, 550);
-  };
-
-  const LSTATUS = { pending: "amber", approved: "ok", rejected: "bad" } as const;
+  const s = db.settings;
+  const balance = leaveBalance(user.id);
+  const myLeaves = db.leaves.filter((l) => l.userId === user.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
   return (
-    <div className="stagger space-y-3">
+    <div className="a-fadein stagger space-y-3">
       {/* profile */}
-      <div className="card relative overflow-hidden">
-        <div className="hazard h-1.5 w-full" />
-        <div className="flex items-center gap-4 p-4">
-          <Avatar user={user} size={56} ring />
+      <div className="card relative overflow-hidden p-4">
+        <div className="hazard absolute inset-x-0 top-0 h-1" />
+        <div className="flex items-center gap-3.5">
+          <Avatar user={user} size={54} ring />
           <div className="min-w-0 flex-1">
-            <h1 className="ttl truncate text-[22px] font-bold leading-tight text-ink">{user.name}</h1>
-            <p className="mt-0.5 font-mono text-[11px] text-faint">{user.employeeId} · {user.department}</p>
+            <p className="ttl text-[19px] font-bold leading-tight text-ink">{user.name}</p>
+            <p className="mt-0.5 font-mono text-[11px] text-faint">{user.employeeId} · {user.department} · {user.email}</p>
             <div className="mt-1.5 flex gap-1.5">
-              <Chip tone="amber">{user.role}</Chip>
-              {user.faceEnrolled && <Chip tone="ok">face id</Chip>}
+              <Chip tone={user.role === "staff" ? "mut" : "amber"}>{user.role}</Chip>
+              <Chip tone="cool">{t("m.member")} {fmtDate(user.createdAt)}</Chip>
             </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 divide-x divide-line2 border-t border-line2 text-center">
-          <div className="py-3">
-            <p className="font-mono text-[19px] font-semibold text-amber">{user.points}</p>
-            <p className="ttl text-[10px] font-bold text-faint">points</p>
-          </div>
-          <div className="py-3">
-            <p className="font-mono text-[19px] font-semibold text-ink">{remaining}d</p>
-            <p className="ttl text-[10px] font-bold text-faint">leave left</p>
-          </div>
-          <div className="py-3">
-            <p className="font-mono text-[19px] font-semibold text-ink">{new Date(user.joinedAt).getFullYear()}</p>
-            <p className="ttl text-[10px] font-bold text-faint">joined</p>
           </div>
         </div>
       </div>
 
       {/* leave */}
-      <div>
-        <SectionTitle right={<Btn className="!px-3 !py-1.5 text-[12px]" onClick={() => setShowLeave(true)}><Send size={13} /> Request</Btn>}>
-          <span className="inline-flex items-center gap-1.5"><CalendarOff size={14} className="text-amber" /> Annual leave</span>
-        </SectionTitle>
-        <div className="card mb-2 p-3.5">
-          <div className="flex items-center justify-between font-mono text-[11.5px] text-mut">
-            <span>{approvedDays} of {ALLOWANCE} days used</span>
-            <span className="text-ok">{Math.round((remaining / ALLOWANCE) * 100)}% remaining</span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-line2">
-            <div className="h-full rounded-full bg-gradient-to-r from-amber to-ok transition-all duration-700" style={{ width: `${(remaining / ALLOWANCE) * 100}%` }} />
-          </div>
+      <div className="card flex items-center gap-3 p-4">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cool/12 text-cool"><Plane size={18} /></span>
+        <div className="flex-1">
+          <p className="ttl text-[13px] font-bold text-ink">{t("m.leaveBal")}</p>
+          <p className="font-mono text-[11px] text-faint">{balance} / 12 {t("s.days")}</p>
         </div>
-        {myLeaves.length === 0 ? (
-          <p className="px-1 font-mono text-[11.5px] text-faint">No leave requests yet.</p>
-        ) : (
-          <div className="card divide-y divide-line2">
-            {myLeaves.map((l) => (
-              <div key={l.id} className="flex items-center justify-between px-3.5 py-2.5">
-                <div>
-                  <p className="font-mono text-[12.5px] font-medium text-ink">{fmtDate(l.from)} → {fmtDate(l.to)}</p>
-                  <p className="mt-0.5 text-[11.5px] text-faint">{l.reason}</p>
-                </div>
-                <Chip tone={LSTATUS[l.status]}>{l.status}</Chip>
+        <Btn variant="ghost" onClick={() => setLeaveOpen(true)}><CalendarOff size={14} /> {t("m.leaveReq")}</Btn>
+      </div>
+      {myLeaves.length > 0 && (
+        <div className="card divide-y divide-line2">
+          {myLeaves.map((l) => (
+            <div key={l.id} className="flex items-center justify-between px-3.5 py-2.5">
+              <div>
+                <p className="font-mono text-[12.5px] font-semibold text-ink">{fmtDate(l.date)}</p>
+                <p className="text-[11.5px] text-mut">{l.reason}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <Chip tone={l.status === "approved" ? "ok" : l.status === "rejected" ? "bad" : "amber"}>{l.status}</Chip>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* quick links */}
+      {/* settings */}
+      <SectionTitle>{t("m.settings")}</SectionTitle>
       <div className="card divide-y divide-line2">
-        <button className="tap flex w-full items-center gap-3 px-4 py-3 text-left" onClick={() => toast(`Piket balance: ${user.points} pts — redeem in the Piket tab`, "info")}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber/12 text-amber"><Star size={15} /></span>
-          <span className="flex-1 text-[13px] font-semibold text-ink">Points & rewards</span>
-          <ChevronRight size={15} className="text-faint" />
-        </button>
-        <button className="tap flex w-full items-center gap-3 px-4 py-3 text-left" onClick={() => toast("Redeem catalog lives in Piket → Rewards", "info")}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ok/12 text-ok"><Gift size={15} /></span>
-          <span className="flex-1 text-[13px] font-semibold text-ink">Reward catalog</span>
-          <ChevronRight size={15} className="text-faint" />
-        </button>
-        <div className="flex items-center gap-3 px-4 py-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cool/12 text-cool">
-            {db.settings.theme === "dark" ? <Moon size={15} /> : <Sun size={15} />}
-          </span>
-          <span className="flex-1 text-[13px] font-semibold text-ink">Night-shift mode</span>
-          <Toggle on={db.settings.theme === "dark"} onChange={(v) => updateSettings({ theme: v ? "dark" : "light" })} />
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <Globe size={15} className="text-amber" />
+            <p className="text-[13px] font-semibold text-ink">{t("a.lang")}</p>
+          </div>
+          <Seg small options={[{ id: "en", label: "English" }, { id: "id", label: "Indonesia" }]}
+            value={s.language} onChange={(v) => { updateSettings({ language: v as Lang }); toast(v === "id" ? "Bahasa Indonesia aktif" : "Language set to English"); }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            {s.theme === "dark" ? <Moon size={15} className="text-cool" /> : <Sun size={15} className="text-amber" />}
+            <p className="text-[13px] font-semibold text-ink">{t("a.night")}</p>
+          </div>
+          <Toggle on={s.theme === "dark"} onChange={(v) => updateSettings({ theme: v ? "dark" : "light" })} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <Bell size={15} className="text-amber" />
+            <p className="text-[13px] font-semibold text-ink">{t("m.notifyApproval")}</p>
+          </div>
+          <Toggle on={user.notifApproval} onChange={(v) => { setNotifPref(user.id, v); toast(v ? "Notifications on" : "Notifications muted", "info"); }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            {s.supabase.status === "connected" ? <Cloud size={15} className="text-cool" /> : <Database size={15} className="text-ok" />}
+            <div>
+              <p className="text-[13px] font-semibold text-ink">{t("m.supabase")}</p>
+              <p className="font-mono text-[10.5px] text-faint">{s.supabase.status === "connected" ? s.supabase.url : t("m.offline")}</p>
+            </div>
+          </div>
+          <Chip tone={s.supabase.status === "connected" ? "cool" : "mut"}>{s.supabase.status === "connected" ? "online" : "local"}</Chip>
         </div>
       </div>
 
-      <Btn variant="danger" className="w-full py-3" onClick={() => { logout(); onLogout(); toast("Signed out — session token revoked", "info"); }}>
-        <LogOut size={15} /> Sign out
-      </Btn>
-      <p className="pb-2 text-center font-mono text-[10px] uppercase tracking-widest text-faint">
-        {db.settings.appName} v1.0 · session JWT · 1h expiry
-      </p>
+      {/* session */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <UserCircle2 size={16} className="text-faint" />
+            <div>
+              <p className="ttl text-[13px] font-bold text-ink">{t("m.session")}</p>
+              <p className="font-mono text-[10.5px] text-faint">{t("m.jwt")}</p>
+            </div>
+          </div>
+          <Btn variant="danger" onClick={() => setConfirmOut(true)}><LogOut size={14} /> {t("c.logout")}</Btn>
+        </div>
+      </div>
 
       {/* leave sheet */}
-      <Sheet open={showLeave} onClose={() => setShowLeave(false)} title="Request annual leave">
+      <Sheet open={leaveOpen} onClose={() => setLeaveOpen(false)} title={t("m.leaveReq")}>
         <div className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="From"><input className="inp font-mono" type="date" min={todayKey()} value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
-            <Field label="To"><input className="inp font-mono" type="date" min={from} value={to} onChange={(e) => setTo(e.target.value)} /></Field>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-dashed border-line px-3.5 py-2.5">
-            <span className="font-mono text-[12px] text-mut">Days requested</span>
-            <span className="font-mono text-[15px] font-semibold text-amber">
-              {Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 864e5) + 1)}d
-            </span>
-          </div>
-          {remaining === 0 && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-[12px] text-bad">Annual allowance exhausted — request will need special approval.</p>}
-          <Field label="Reason">
-            <textarea className="inp min-h-[70px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Family event — out of town" />
+          <Field label={t("o.date")}>
+            <input className="inp font-mono" type="date" min={todayKey()} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Btn className="w-full" busy={busy} onClick={submit}><Send size={14} /> Submit request</Btn>
+          <Field label={t("m.leaveReason")}>
+            <textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="…" />
+          </Field>
+          <Btn className="w-full" busy={busy} disabled={!date || !reason.trim()} onClick={() => {
+            setBusy(true);
+            setTimeout(() => {
+              const res = requestLeave(user.id, date, reason.trim());
+              setBusy(false);
+              if (res.ok) { toast(res.msg, "ok"); setLeaveOpen(false); setDate(""); setReason(""); }
+              else toast(res.msg, "err");
+            }, 450);
+          }}><Plane size={15} /> {t("m.submit")}</Btn>
         </div>
       </Sheet>
+
+      <Confirm open={confirmOut} onClose={() => setConfirmOut(false)} danger
+        title={t("c.logoutQ")} body={t("c.logoutBody")} yesLabel={t("c.logout")}
+        onYes={() => { logout(); }} />
     </div>
   );
 }
