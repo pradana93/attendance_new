@@ -155,6 +155,41 @@ export interface Settings {
   supabase: SupaCfg;
 }
 
+/** Shift handover note — outgoing crew briefs the incoming crew */
+export interface Handover {
+  id: string;
+  date: string;
+  shiftId: string;
+  fromUserId: string;
+  note: string;
+  /** unresolved problem handed over (optional) */
+  issue?: string;
+  createdAt: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
+}
+
+/** Piket swap request — staff asks a colleague to cover one duty date */
+export interface SwapRequest {
+  id: string;
+  date: string;
+  taskId: string;
+  fromUserId: string;
+  toUserId: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  decidedBy?: string;
+}
+
+/** Approved swap → per-date roster override */
+export interface SwapOverride {
+  id: string;
+  date: string;
+  taskId: string;
+  userId: string;
+}
+
 export interface DB {
   version: number;
   settings: Settings;
@@ -170,4 +205,7 @@ export interface DB {
   announcements: Announcement[];
   notifications: Notif[];
   leaves: Leave[];
+  handovers: Handover[];
+  swapRequests: SwapRequest[];
+  swapOverrides: SwapOverride[];
 }

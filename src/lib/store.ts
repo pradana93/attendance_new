@@ -1,14 +1,14 @@
 import { useSyncExternalStore } from "react";
 import type {
-  Announcement, Attendance, DB, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
-  PointEvent, Redemption, RedeemItem, Role, Settings, User,
+  Announcement, Attendance, DB, Handover, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
+  PointEvent, Redemption, RedeemItem, Role, Settings, SwapRequest, User,
 } from "../types";
 import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
 
 const DB_KEY = "shiftgate.db.v3";
 const SESSION_KEY = "shiftgate.session";
 const REMEMBER_KEY = "shiftgate.remember";
-const VERSION = 3;
+const VERSION = 4;
 
 const defaultSettings: Settings = {
   appName: "ShiftGate", company: "PT Nusa Logistik", siteName: "WH-01 · Jakarta",
@@ -197,7 +197,40 @@ function seed(): DB {
     { id: uid(), title: "Forklift charging bay moved", body: "Starting Monday, forklifts charge at Bay 7. Do not block the outbound lane after 15:00.", author: "Rina Wijaya", date: dayKey(addDays(new Date(), -3)), pinned: false },
   ];
 
-  return { version: VERSION, settings: { ...defaultSettings }, users, attendance, tasks, template, piketLog, ot, pointEvents, redemptions, items, announcements, notifications, leaves };
+  /* --- shift handovers (demo history) --- */
+  const handovers: Handover[] = [
+    {
+      id: uid(), date: dayKey(addDays(new Date(), -1)), shiftId: "afternoon", fromUserId: staff[1].id,
+      note: "Inbound lane 3 cleared. 2 pallets staged at B. Forklift #2 battery swapped and charging at Bay 7.",
+      createdAt: dayKey(addDays(new Date(), -1)) + "T16:55:00",
+      confirmedBy: staff[3].id, confirmedAt: dayKey(addDays(new Date(), -1)) + "T17:10:00",
+    },
+    {
+      id: uid(), date: todayKey(), shiftId: "morning", fromUserId: staff[0].id,
+      note: "Container 40ft TGHU-8812 half unloaded — resume after lunch break. Outbound lane clear.",
+      issue: "Rolling door B2 macet — teknisi sudah dihubungi (technician called)",
+      createdAt: todayKey() + "T11:50:00",
+    },
+  ];
+
+  /* --- piket swap requests (one pending demo) --- */
+  const monday = mondayOf(new Date());
+  let swapDate = dayKey(addDays(monday, 3)); // Thursday
+  if (swapDate <= todayKey()) swapDate = dayKey(addDays(monday, 10));
+  const thEntry = template.find((t) => t.day === 4);
+  const swapFrom = thEntry?.userId ?? staff[2].id;
+  const swapTo = staff.find((s) => s.id !== swapFrom)!.id;
+  const swapRequests: SwapRequest[] = [{
+    id: uid(), date: swapDate, taskId: thEntry?.taskId ?? tasks[3].id, fromUserId: swapFrom, toUserId: swapTo,
+    reason: "Ada urusan keluarga — bisa gantikan piket hari itu? (family matter)",
+    status: "pending", createdAt: new Date().toISOString(),
+  }];
+
+  return {
+    version: VERSION, settings: { ...defaultSettings }, users, attendance, tasks, template, piketLog, ot,
+    pointEvents, redemptions, items, announcements, notifications, leaves,
+    handovers, swapRequests, swapOverrides: [],
+  };
 }
 
 function mulberry(a: number) {
@@ -213,7 +246,7 @@ function mulberry(a: number) {
 /** Permanent Super Admin credentials (fixed for this deployment) */
 export const SUPER_EMAIL = "majestap93@gmail.com";
 export const SUPER_PASSWORD = "super123";
-export const APP_VERSION = "1.4.0";
+export const APP_VERSION = "1.6.0";
 
 /** Gmail SMTP relay used for password-reset delivery */
 export const SMTP_RELAY = { host: "smtp.gmail.com", port: 587, security: "STARTTLS", from: "ShiftGate <no-reply@shiftgate.app>" };
@@ -248,7 +281,7 @@ export function rerunSetup() {
   try { localStorage.removeItem(DB_KEY); sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
   cache = null;
   initStore();
-  const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [] };
+  const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [] };
   cache = fresh;
   persist();
   emit();
@@ -270,7 +303,7 @@ export function completeSetup(args: { appName: string; company: string; logo?: s
   cache = {
     ...seed(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
-    users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [],
+    users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [],
     announcements: [{ id: uid(), title: "Workspace ready", body: "Add staff accounts, then build the weekly piket template in the Piket tab.", author: args.adminName, date: todayKey(), pinned: true }],
   };
   persist(); emit();
@@ -412,7 +445,12 @@ export const piketForDate = (date: string): { task: PiketTask; assign: PiketAssi
     .filter((a) => a.day === wd)
     .map((a) => ({ a, task: cache!.tasks.find((t) => t.id === a.taskId) }))
     .filter((x): x is { a: PiketAssignment; task: PiketTask } => !!x.task && x.task.active)
-    .map(({ a, task }) => ({ task, assign: a, log: cache!.piketLog.find((l) => l.date === date && l.taskId === task.id && l.userId === a.userId) }));
+    .map(({ a, task }) => {
+      // approved swaps override the weekly template for one specific date
+      const ov = cache!.swapOverrides.find((o) => o.date === date && o.taskId === task.id);
+      const assign: PiketAssignment = ov ? { ...a, userId: ov.userId } : a;
+      return { task, assign, log: cache!.piketLog.find((l) => l.date === date && l.taskId === task.id && l.userId === assign.userId) };
+    });
 };
 
 export const myPiketToday = (userId: string) => piketForDate(todayKey()).filter((r) => r.assign.userId === userId);
@@ -429,6 +467,56 @@ export function completePiket(date: string, taskId: string, userId: string, proo
   pushNotif(userId, "Piket completed", `${task.name} · +${task.points} pts credited.`);
   mutate();
   return { ok: true, msg: `+${task.points} pts`, points: task.points };
+}
+
+/* ================= shift handovers ================= */
+export function addHandover(userId: string, date: string, shiftId: string, note: string, issue?: string): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  cache.handovers.unshift({ id: uid(), date, shiftId, fromUserId: userId, note, issue: issue?.trim() || undefined, createdAt: new Date().toISOString() });
+  cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Shift handover", `${userName(userId)} posted a handover note${issue ? " with a pending issue" : ""}.`));
+  mutate();
+  return { ok: true, msg: "Handover posted — incoming crew will confirm." };
+}
+
+export function confirmHandover(id: string, userId: string) {
+  if (!cache) return;
+  const h = cache.handovers.find((x) => x.id === id);
+  if (!h || h.confirmedBy) return;
+  h.confirmedBy = userId;
+  h.confirmedAt = new Date().toISOString();
+  pushNotif(h.fromUserId, "Handover confirmed", `${userName(userId)} confirmed your shift handover.`);
+  mutate();
+}
+
+/* ================= piket swaps ================= */
+export function requestSwap(fromUserId: string, toUserId: string, date: string, taskId: string, reason: string): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  if (cache.swapRequests.some((s) => s.date === date && s.taskId === taskId && s.status === "pending"))
+    return { ok: false, msg: "A swap for this duty is already pending." };
+  cache.swapRequests.unshift({ id: uid(), date, taskId, fromUserId, toUserId, reason, status: "pending", createdAt: new Date().toISOString() });
+  const task = cache.tasks.find((t) => t.id === taskId);
+  pushNotif(toUserId, "Swap request", `${userName(fromUserId)} wants to swap "${task?.name ?? "piket"}" on ${fmtDate(date)} with you.`);
+  cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Swap request", `${userName(fromUserId)} → ${userName(toUserId)} · ${task?.name ?? ""} · ${fmtDate(date)}`));
+  mutate();
+  return { ok: true, msg: "Swap request sent for approval." };
+}
+
+export function decideSwap(id: string, approve: boolean, decider: string) {
+  if (!cache) return;
+  const s = cache.swapRequests.find((x) => x.id === id);
+  if (!s || s.status !== "pending") return;
+  s.status = approve ? "approved" : "rejected";
+  s.decidedBy = decider;
+  if (approve) {
+    // remove any earlier override for this duty date, then apply the swap
+    cache.swapOverrides = cache.swapOverrides.filter((o) => !(o.date === s.date && o.taskId === s.taskId));
+    cache.swapOverrides.push({ id: uid(), date: s.date, taskId: s.taskId, userId: s.toUserId });
+  }
+  const task = cache.tasks.find((t) => t.id === s.taskId);
+  const label = `${task?.name ?? "Piket"} · ${fmtDate(s.date)}`;
+  pushNotif(s.fromUserId, approve ? "Swap approved" : "Swap rejected", `${label} — ${approve ? `${userName(s.toUserId)} will cover your duty.` : "request declined by admin."}`);
+  pushNotif(s.toUserId, approve ? "Swap approved" : "Swap rejected", `${label} — ${approve ? "you are now assigned this duty." : "request declined by admin."}`);
+  mutate();
 }
 
 export function setAssignment(taskId: string, day: number, userId: string | null) {

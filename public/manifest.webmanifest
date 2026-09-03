@@ -1,0 +1,17 @@
+{
+  "name": "ShiftGate — Warehouse Attendance",
+  "short_name": "ShiftGate",
+  "description": "Warehouse staff attendance, piket roster, points and overtime management.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1318",
+  "theme_color": "#0f1318",
+  "lang": "en",
+  "icons": [
+    { "src": "https://image.qwenlm.ai/generated-images/461f95db-58b1-4573-97a0-17584412ae94/_result.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "https://image.qwenlm.ai/generated-images/461f95db-58b1-4573-97a0-17584412ae94/_result.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
