@@ -125,6 +125,17 @@ const en = {
   // profile sheet
   "pf.install": "Install app", "pf.installHint": "Full-screen & offline — or use browser menu → Add to home screen",
   "pf.member": "Member since", "pf.quick": "Quick settings",
+  // search
+  "sr.placeholder": "Search staff, piket tasks, notices…", "sr.noResults": "No matches found",
+  "sr.staff": "Staff", "sr.tasks": "Piket tasks", "sr.notifs": "Notifications", "sr.news": "Notices",
+  // ops brief
+  "ob.title": "Ops brief", "ob.copy": "Copy brief", "ob.copied": "Ops brief copied to clipboard",
+  "ob.onDuty": "On duty", "ob.notIn": "Not checked in", "ob.lateN": "late", "ob.piketDone": "Piket done",
+  "ob.pending": "Pending", "ob.ot": "OT", "ob.swaps": "swaps", "ob.selfRep": "self-reports",
+  "ob.rain": "Rain alert — cover open containers", "ob.allClear": "All clear — floor is running smooth",
+  // floor radar
+  "lr.title": "Floor radar", "lr.live": "live positions", "lr.sim": "positions simulated for demo",
+  "d.onDutyFor": "on duty", "h.offline": "offline", "d.rainHint": "Rain today — container temp photos take priority",
 };
 
 export type TKey = keyof typeof en;
@@ -242,6 +253,14 @@ const id: Record<TKey, string> = {
   // profile sheet
   "pf.install": "Pasang aplikasi", "pf.installHint": "Layar penuh & offline — atau menu browser → Tambah ke layar utama",
   "pf.member": "Bergabung", "pf.quick": "Pengaturan cepat",
+  "sr.placeholder": "Cari staf, tugas piket, pengumuman…", "sr.noResults": "Tidak ada hasil",
+  "sr.staff": "Staf", "sr.tasks": "Tugas piket", "sr.notifs": "Notifikasi", "sr.news": "Pengumuman",
+  "ob.title": "Ringkasan operasional", "ob.copy": "Salin ringkasan", "ob.copied": "Ringkasan disalin ke clipboard",
+  "ob.onDuty": "Bertugas", "ob.notIn": "Belum absen", "ob.lateN": "terlambat", "ob.piketDone": "Piket selesai",
+  "ob.pending": "Menunggu", "ob.ot": "lembur", "ob.swaps": "tukar", "ob.selfRep": "lapor mandiri",
+  "ob.rain": "Alert hujan — tutup kontainer yang terbuka", "ob.allClear": "Semua aman — operasional lancar",
+  "lr.title": "Radar lantai", "lr.live": "posisi live", "lr.sim": "posisi disimulasikan untuk demo",
+  "d.onDutyFor": "bertugas", "h.offline": "offline", "d.rainHint": "Hujan hari ini — foto suhu kontainer jadi prioritas",
 };
 
 const dicts: Record<Lang, Record<TKey, string>> = { en, id };

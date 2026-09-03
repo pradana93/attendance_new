@@ -127,6 +127,33 @@ export function locateWithFallback(
 /* ---------------- misc ---------------- */
 export const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Haptic feedback (Android) — silently no-ops elsewhere */
+export function vibrate(pattern: number | number[]) {
+  try { navigator.vibrate?.(pattern); } catch { /* unsupported */ }
+}
+
+/** Clipboard with legacy fallback — resolves true when copied */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 /** Indonesian Rupiah formatting */
 export function fmtIDR(n: number): string {
   if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} jt`;

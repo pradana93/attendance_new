@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon } from "lucide-react";
+import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon, WifiOff } from "lucide-react";
 import type { User } from "./types";
 import { getDB, getSessionUser, hasWorkspace, initStore, logout, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
 import { fmtClock, fmtDate, relTime } from "./lib/util";
@@ -108,8 +108,17 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const [online, setOnline] = useState(() => navigator.onLine);
   const navRef = useRef(nav);
   navRef.current = nav;
+
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
 
   const { tab, sec: adminSec } = nav;
 
@@ -197,6 +206,9 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
               return <>{h}<span className="colon">:</span>{m}<span className="colon">:</span>{s}</>;
             })()}
           </span>
+          {!online && (
+            <Chip tone="amber" className="shrink-0"><WifiOff size={11} /> {t("h.offline")}</Chip>
+          )}
           <button onClick={() => { setBellOpen(true); markNotisRead(user.id); }}
             className="tap relative rounded-[10px] border border-line bg-panel2 p-2 text-mut hover:text-ink" aria-label={t("c.notifications")}>
             <Bell size={16} />
@@ -213,7 +225,14 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
       {/* page — bottom padding clears the fixed tab bar + device safe area */}
       <main className="app-main px-4 pt-4">
         <div key={tab + adminSec} className="pagein">
-          {tab === "home" && <Dashboard user={user} goTab={(x) => goTab(x as Tab)} />}
+          {tab === "home" && (
+            <Dashboard
+              user={user}
+              goTab={(x) => goTab(x as Tab)}
+              onBell={() => { setBellOpen(true); markNotisRead(user.id); }}
+              onAdminSec={(s) => goAdminSec(s as AdminSec)}
+            />
+          )}
           {tab === "piket" && <Schedule user={user} />}
           {tab === "stats" && <Performance user={user} />}
           {tab === "ot" && <Overtime user={user} />}
