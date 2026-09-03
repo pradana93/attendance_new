@@ -17,6 +17,18 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "1.7.0", date: "2026-03-18", name: "Surface upgrade",
+    items: [
+      { tag: "improved", text: "Ambient layered background: film grain plus a slow radar-beacon sweep behind every screen." },
+      { tag: "improved", text: "New splash: the warehouse roller door rolls up to reveal the brand mark with a boot sequence." },
+      { tag: "improved", text: "Login gains a live 'systems armed' checklist and an animated conveyor strip." },
+      { tag: "improved", text: "The check-in button is now a heavy industrial press: layered depth, moving light sweep, press physics." },
+      { tag: "improved", text: "Clock card is an instrument panel — blinking colons, passing scanline and a live shift-progress bar." },
+      { tag: "improved", text: "Toasts show a lifetime bar, tabs pop when activated, sheets spring in, pages glide on switch." },
+      { tag: "improved", text: "Polish: themed scrollbars, amber focus rings, reduced-motion support for every new animation." },
+    ],
+  },
+  {
     version: "1.6.0", date: "2026-03-10", name: "Ops upgrades & installable app",
     items: [
       { tag: "fixed", text: "Logout & changelog are now reachable for every role — tap your avatar in the header to open the profile sheet." },

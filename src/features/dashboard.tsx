@@ -113,11 +113,16 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
 
       {/* clock + punch card */}
       <div className="card overflow-hidden">
-        <div className="hazard h-1.5 w-full" />
-        <div className="p-4">
+        <div className="conveyor h-1.5 w-full" />
+        <div className="clockface p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-mono text-[38px] font-semibold leading-none tracking-tight text-ink tabular-nums">{fmtClock(now)}</p>
+              <p className="tabular font-mono text-[42px] font-semibold leading-none tracking-tight text-ink">
+                {(() => {
+                  const [h, m, s] = fmtClock(now).split(":");
+                  return <>{h}<span className="colon">:</span>{m}<span className="colon">:</span>{s}</>;
+                })()}
+              </p>
               <p className="mt-1.5 font-mono text-[11px] uppercase tracking-wider text-faint">
                 {db?.settings.siteName} · gate beacon active
               </p>
@@ -128,6 +133,18 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
                 {kind === "done" ? t("d.shiftcomplete") : kind === "out" ? t("d.onduty") : t("d.notin")}
               </p>
             </div>
+          </div>
+
+          {/* shift progress — 08:00 → 17:00 */}
+          <div className="mt-3.5">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line2">
+              <div className="h-full rounded-full bg-gradient-to-r from-amberd to-amber transition-[width] duration-700"
+                style={{ width: `${Math.min(100, Math.max(0, Math.round(((now.getTime() - new Date(new Date(now).setHours(8, 0, 0, 0)).getTime()) / (9 * 3600 * 1000)) * 100)))}%` }} />
+            </div>
+            <p className="mt-1.5 flex justify-between font-mono text-[9.5px] uppercase tracking-widest text-faint">
+              <span>shift 08:00 – 17:00</span>
+              <span className="tabular text-amber">{Math.min(100, Math.max(0, Math.round(((now.getTime() - new Date(new Date(now).setHours(8, 0, 0, 0)).getTime()) / (9 * 3600 * 1000)) * 100)))}%</span>
+            </p>
           </div>
 
           {kind === "done" ? (
@@ -143,8 +160,8 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
             </div>
           ) : (
             <button onClick={() => setFlowOpen(true)}
-              className="tap group mt-4 block w-full overflow-hidden rounded-xl bg-amber text-left shadow-[0_10px_30px_rgba(255,178,36,0.25)] hover:brightness-110">
-              <div className="flex items-center justify-between px-4 py-4">
+              className="punch group mt-4 block w-full overflow-hidden rounded-xl bg-amber text-left shadow-[0_12px_32px_rgba(255,178,36,0.28),inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-3px_0_rgba(0,0,0,0.18)] hover:brightness-110">
+              <div className="relative z-10 flex items-center justify-between px-4 py-4">
                 <div>
                   <p className="ttl text-[22px] font-extrabold leading-none text-[#191203]">
                     {kind === "in" ? t("d.checkin") : t("d.checkout")}
@@ -158,8 +175,8 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
                 </span>
               </div>
               {kind === "out" && (
-                <div className="border-t border-[#191203]/15 bg-[#191203]/8 px-4 py-1.5 font-mono text-[11px] text-[#3d2e03]">
-                  {fmtTime(rec?.checkIn)} → · {rec?.late ? t("f.late") : t("f.onTime")}
+                <div className="relative z-10 border-t border-[#191203]/15 bg-[#191203]/8 px-4 py-1.5 font-mono text-[11px] text-[#3d2e03]">
+                  since {fmtTime(rec?.checkIn)} · {rec?.late ? t("f.late") : t("f.onTime")}
                 </div>
               )}
             </button>

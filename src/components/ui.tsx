@@ -26,9 +26,10 @@ export function Toaster() {
   return createPortal(
     <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),12px)] z-[90] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
-        <div key={t.id} className="a-drop pointer-events-auto flex w-full max-w-sm items-center gap-2.5 rounded-xl border border-line bg-panel px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
+        <div key={t.id} className="a-drop pointer-events-auto relative flex w-full max-w-sm items-center gap-2.5 overflow-hidden rounded-xl border border-line bg-panel px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
           {Icon(t.kind)}
           <p className="text-[13px] font-medium leading-snug text-ink">{t.text}</p>
+          <span className="toastbar absolute bottom-0 left-0 h-[2px] rounded-full bg-amber" />
         </div>
       ))}
     </div>,
@@ -247,7 +248,7 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal>
       <button className="a-fadein absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} aria-label="Close" />
-      <div className={`a-rise relative max-h-[92dvh] w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} overflow-hidden rounded-t-2xl border border-line bg-panel shadow-[0_-16px_60px_rgba(0,0,0,0.5)] sm:rounded-2xl`}>
+      <div className={`a-spring relative max-h-[92dvh] w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"} overflow-hidden rounded-t-2xl border border-line bg-panel shadow-[0_-16px_60px_rgba(0,0,0,0.5)] sm:rounded-2xl`}>
         <div className="hazard h-1 w-full opacity-80" />
         <div className="flex justify-center pt-1.5"><span className="h-1 w-10 rounded-full bg-line2" /></div>
         <div className="flex max-h-[89dvh] flex-col">
