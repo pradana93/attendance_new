@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+/* ---------- runtime theme variables ---------- */
+:root,
+[data-theme="dark"] {
+  --bg: #0f1318;
+  --panel: #161c23;
+  --panel2: #1c242e;
+  --line: #2a333f;
+  --line2: #222b35;
+  --ink: #e8edf3;
+  --mut: #8c98a8;
+  --faint: #5d6879;
+  --amber: #ffb224;
+  --amberd: #d98e00;
+  --ok: #3ed598;
+  --bad: #ff6262;
+  --cool: #5ac8e8;
+  --glow1: rgba(255, 178, 36, 0.07);
+  --glow2: rgba(90, 200, 232, 0.05);
+  --grid: rgba(140, 152, 168, 0.055);
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #ecf0f3;
+  --panel: #ffffff;
+  --panel2: #f3f6f9;
+  --line: #d8dfe7;
+  --line2: #e2e8ee;
+  --ink: #151b23;
+  --mut: #5a6675;
+  --faint: #94a0af;
+  --amber: #e08e00;
+  --amberd: #b87400;
+  --ok: #0d9d68;
+  --bad: #d94141;
+  --cool: #0e93b8;
+  --glow1: rgba(224, 142, 0, 0.06);
+  --glow2: rgba(14, 147, 184, 0.05);
+  --grid: rgba(21, 27, 35, 0.05);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-ink: var(--ink);
+  --color-mut: var(--mut);
+  --color-faint: var(--faint);
+  --color-amber: var(--amber);
+  --color-amberd: var(--amberd);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-cool: var(--cool);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* ---------- base ---------- */
+html,
+body {
+  height: 100%;
+}
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1100px 520px at 88% -12%, var(--glow1), transparent 62%),
+    radial-gradient(900px 560px at -12% 112%, var(--glow2), transparent 62%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: auto, auto, 30px 30px, 30px 30px;
+  background-attachment: fixed;
+}
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+input[type="date"],
+input[type="time"] {
+  color-scheme: inherit;
+}
+::selection {
+  background: var(--amber);
+  color: #171204;
+}
+
+/* ---------- reusable pieces ---------- */
+.hazard {
+  background: repeating-linear-gradient(-45deg, var(--amber) 0 9px, #171b21 9px 18px);
+}
+[data-theme="light"] .hazard {
+  background: repeating-linear-gradient(-45deg, var(--amber) 0 9px, #232a33 9px 18px);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.card2 {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 12px;
+}
+.ttl {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.tap {
+  transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.tap:active {
+  transform: scale(0.965);
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.inp {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.inp::placeholder {
+  color: var(--faint);
+}
+.inp:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(255, 178, 36, 0.15);
+}
+
+/* ---------- keyframes ---------- */
+@keyframes fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes drop {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes scanline {
+  0% { transform: translateY(-120%); }
+  100% { transform: translateY(560%); }
+}
+@keyframes drawcheck {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pulsedot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.7); opacity: 0.35; }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes blinkc {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.a-fadein { animation: fadein 0.25s ease both; }
+.a-rise { animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.a-drop { animation: drop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.a-pop { animation: pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.a-shake { animation: shake 0.4s ease both; }
+.a-floaty { animation: floaty 3.4s ease-in-out infinite; }
+.scanbeam { animation: scanline 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.pulse-dot { animation: pulsedot 1.6s ease-in-out infinite; }
+.draw-check { stroke-dasharray: 60; stroke-dashoffset: 60; animation: drawcheck 0.5s 0.15s ease-out forwards; }
+.draw-ring { stroke-dasharray: 320; stroke-dashoffset: 320; animation: drawcheck 0.7s ease-out forwards; }
+.skeleton {
+  background: linear-gradient(90deg, var(--panel2) 25%, var(--line2) 50%, var(--panel2) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.blinkc::after {
+  content: "_";
+  animation: blinkc 1.1s step-end infinite;
+  color: var(--amber);
+}
+.stagger > * { animation: rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.stagger > *:nth-child(6) { animation-delay: 0.22s; }
+.stagger > *:nth-child(7) { animation-delay: 0.26s; }
+.stagger > *:nth-child(8) { animation-delay: 0.3s; }
