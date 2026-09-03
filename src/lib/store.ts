@@ -1,683 +1,708 @@
-/**
- * Local-first data layer.
- * Shape mirrors the production Supabase/Postgres schema; every mutation is an
- * immutable swap + persist, so swapping in `supabase-js` later only touches this file.
- */
 import { useSyncExternalStore } from "react";
 import type {
-  Announcement, Attendance, DB, LeaveReq, Noti, OTReq, PointEvent,
-  Redemption, Role, ScheduleEntry, Settings, Shift, User,
+  Announcement, Attendance, DB, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
+  PointEvent, Redemption, RedeemItem, Role, Settings, User,
 } from "../types";
-import { addDays, dayKey, isAfter, mondayOf, mulberry32, pad2, parseKey, todayKey, uid } from "./util";
+import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
 
-const LS_DB = "shiftgate_db_v1";
-const LS_SES = "shiftgate_session_v1";
-const LS_THEME = "shiftgate_theme";
+const DB_KEY = "shiftgate.db.v3";
+const SESSION_KEY = "shiftgate.session";
+const REMEMBER_KEY = "shiftgate.remember";
+const VERSION = 3;
+
+const defaultSettings: Settings = {
+  appName: "ShiftGate", company: "PT Nusa Logistik", siteName: "WH-01 · Jakarta",
+  lat: -6.1754, lng: 106.8272, radius: 100, lateTime: "08:15", theme: "dark", hue: 38,
+  pointsExpiryMonths: 12, otRate: 25000, language: "en",
+  supabase: { url: "", key: "", status: "off" },
+};
+
+let cache: DB | null = null;
+const subs = new Set<() => void>();
+export const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
+const emit = () => subs.forEach((f) => f());
+const persist = () => { try { localStorage.setItem(DB_KEY, JSON.stringify(cache)); } catch { /* storage full */ } };
+const mutate = () => { persist(); emit(); };
+
+export const getDB = () => cache;
+export const useDB = (): DB | null => useSyncExternalStore(subscribe, getDB);
 
 /* ================= seed ================= */
-const DEMO_STAFF: Omit<User, "id" | "joinedAt">[] = [
-  { name: "Andi Setiawan", email: "admin@nusalogistik.id", password: "admin123", role: "admin", employeeId: "WMS-001", department: "Operations", hue: 48, faceEnrolled: true, faceHash: "f8c2ab91", active: true, points: 0 },
-  { name: "Budi Santoso", email: "budi@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-011", department: "Forklift", hue: 30, faceEnrolled: true, faceHash: "1d77e04c", active: true, points: 0 },
-  { name: "Dewi Lestari", email: "dewi@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-007", department: "Inbound", hue: 160, faceEnrolled: true, faceHash: "9a31bb02", active: true, points: 0 },
-  { name: "Agus Prasetyo", email: "agus@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-015", department: "Outbound", hue: 210, faceEnrolled: true, faceHash: "c45f7d8e", active: true, points: 0 },
-  { name: "Rina Wijaya", email: "rina@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-003", department: "Inventory", hue: 280, faceEnrolled: true, faceHash: "57aa12f6", active: true, points: 0 },
-  { name: "Joko Susilo", email: "joko@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-021", department: "Packing", hue: 96, faceEnrolled: true, faceHash: "e309c4d5", active: true, points: 0 },
-  { name: "Siti Aminah", email: "siti@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-009", department: "QA", hue: 340, faceEnrolled: true, faceHash: "b81d5e77", active: true, points: 0 },
-  { name: "Tono Hartono", email: "tono@nusalogistik.id", password: "staff123", role: "staff", employeeId: "WMS-018", department: "Outbound", hue: 260, faceEnrolled: false, faceHash: "", active: false, points: 0 },
+const seedTasks = (): PiketTask[] => [
+  { id: "t-depan", name: "Harian Depan", area: "Depan", points: 10, requiresProof: false, active: true, icon: "broom", desc: "Sweep & tidy the front area and pallet staging lane" },
+  { id: "t-tengah", name: "Harian Tengah", area: "Tengah", points: 10, requiresProof: false, active: true, icon: "mop", desc: "Aisle cleaning and rack inspection in the middle zone" },
+  { id: "t-belakang", name: "Harian Belakang", area: "Belakang", points: 10, requiresProof: false, active: true, icon: "broom", desc: "Rear dock, waste area and loading bay cleanup" },
+  { id: "t-door", name: "Tutup Rolling Door", area: "Gudang", points: 15, requiresProof: true, active: true, icon: "door", desc: "Close & lock all rolling doors after the last shift" },
+  { id: "t-suhu20", name: "Foto Suhu Container 20ft", area: "Gudang", points: 20, requiresProof: true, active: true, icon: "thermo", desc: "Photograph the thermometer reading of the 20ft container" },
+  { id: "t-suhu40", name: "Foto Suhu Container 40ft", area: "Gudang", points: 20, requiresProof: true, active: true, icon: "thermo", desc: "Photograph the thermometer reading of the 40ft container" },
 ];
 
-const SHIFTS: Shift[] = [
-  { id: "s1", name: "Morning", window: "06:00 – 14:00", start: "06:00", end: "14:00", points: 10, tone: "morning" },
-  { id: "s2", name: "Afternoon", window: "14:00 – 22:00", start: "14:00", end: "22:00", points: 12, tone: "afternoon" },
-  { id: "s3", name: "Night", window: "22:00 – 06:00", start: "22:00", end: "06:00", points: 15, tone: "night" },
-];
+function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: string, hue: number, password = "shift123", faceEnrolled = true): User {
+  return { id, name, email, password, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
+}
 
-const ITEMS = [
-  { id: "i1", name: "Sembako Pack", cost: 150, stock: 24, cat: "Essentials" as const, icon: "package" },
-  { id: "i2", name: "E-Wallet Rp 50k", cost: 120, stock: 40, cat: "Voucher" as const, icon: "wallet" },
-  { id: "i3", name: "Safety Gloves", cost: 60, stock: 55, cat: "Gear" as const, icon: "shield" },
-  { id: "i4", name: "Steel Tumbler", cost: 90, stock: 18, cat: "Gear" as const, icon: "cup" },
-  { id: "i5", name: "1-Day Leave Voucher", cost: 300, stock: 8, cat: "Voucher" as const, icon: "ticket" },
-  { id: "i6", name: "Snack Box", cost: 40, stock: 60, cat: "Essentials" as const, icon: "snack" },
-];
+function seed(): DB {
+  const users: User[] = [
+    mkUser("u-admin", "Budi Santoso", "budi@nusalogistik.id", "superadmin", "WMS-001", "Operations", 210),
+    mkUser("u-2", "Rina Wijaya", "rina@nusalogistik.id", "admin", "WMS-002", "Operations", 330),
+    mkUser("u-3", "Agus Prasetyo", "agus@nusalogistik.id", "staff", "WMS-003", "Inbound", 22),
+    mkUser("u-4", "Dewi Lestari", "dewi@nusalogistik.id", "staff", "WMS-004", "Outbound", 152),
+    mkUser("u-5", "Joko Susilo", "joko@nusalogistik.id", "staff", "WMS-005", "Inventory", 262),
+    mkUser("u-6", "Siti Rahma", "siti@nusalogistik.id", "staff", "WMS-006", "Packing", 42),
+    mkUser("u-7", "Andi Saputra", "andi@nusalogistik.id", "staff", "WMS-007", "Inbound", 192),
+    mkUser("u-8", "Maya Putri", "maya@nusalogistik.id", "staff", "WMS-008", "QA", 302),
+    mkUser("u-9", "Fajar Hidayat", "fajar@nusalogistik.id", "staff", "WMS-009", "Forklift", 122, "shift123", false),
+    mkUser("u-10", "Lina Marlina", "lina@nusalogistik.id", "staff", "WMS-010", "Outbound", 2, "shift123", false),
+  ];
+  users[8].active = false;
 
-function buildSeed(superAdmin: User | null, settings: Settings): DB {
-  const rng = mulberry32(20240817);
-  const now = new Date();
-  const users: User[] = DEMO_STAFF.map((s, i) => ({
-    ...s,
-    id: "u" + (i + 2),
-    joinedAt: new Date(now.getFullYear() - 1, 2, 5 + i * 9).toISOString(),
-  }));
-  if (superAdmin) users.unshift(superAdmin);
-
-  const attendance: Attendance[] = [];
-  const schedules: ScheduleEntry[] = [];
-  const pointEvents: PointEvent[] = [];
   const staff = users.filter((u) => u.role === "staff" && u.active);
+  const tasks = seedTasks();
 
-  // ~11 weeks of attendance history (Mon–Sat operation).
-  for (let back = 77; back >= 1; back--) {
-    const d = addDays(now, -back);
-    if (d.getDay() === 0) continue;
-    const key = dayKey(d);
-    staff.forEach((u, ui) => {
-      const r = rng();
-      if (r < 0.055) return; // absent day
-      const lateBias = ui === 2 ? 0.3 : ui === 4 ? 0.22 : 0.1;
-      const late = rng() < lateBias;
-      const inMin = late ? 8 * 60 + 4 + Math.floor(rng() * 34) : 7 * 60 + 32 + Math.floor(rng() * 27);
-      const outMin = 16 * 60 + Math.floor(rng() * 100);
-      const iso = (mins: number) => {
-        const c = new Date(d);
-        c.setHours(Math.floor(mins / 60), mins % 60, Math.floor(rng() * 60), 0);
-        return c.toISOString();
-      };
-      attendance.push({
-        id: uid(), userId: u.id, date: key,
-        checkIn: iso(inMin), checkOut: iso(outMin),
-        inScore: 88 + Math.floor(rng() * 11), outScore: 87 + Math.floor(rng() * 12),
-        distance: 9 + Math.floor(rng() * 82), method: rng() < 0.82 ? "face" : "qr",
-        late, earlyOut: outMin < 16 * 60, reviewed: true,
-      });
-    });
-  }
-
-  // Piket roster: 2 past weeks (done) + current/next week, rotating shifts.
-  const mon = mondayOf(now);
-  for (let w = -2; w <= 1; w++) {
-    for (let dow = 0; dow < 6; dow++) {
-      const d = addDays(mon, w * 7 + dow);
-      const key = dayKey(d);
-      const past = key < todayKey();
-      staff.forEach((u, ui) => {
-        const shift = SHIFTS[(ui + dow + w + 6) % 3];
-        const done = past && rng() > 0.08;
-        schedules.push({ id: uid(), userId: u.id, date: key, shiftId: shift.id, done, proof: done && rng() > 0.25 });
-        if (done) {
-          const bonus = rng() < 0.12 ? 3 : 0;
-          pointEvents.push({ id: uid(), userId: u.id, delta: shift.points + bonus, date: key, label: `Piket ${shift.name}${bonus ? " · bonus" : ""}` });
-          u.points += shift.points + bonus;
-        }
-      });
+  // weekly template: rotate staff across tasks × Mon–Sat
+  const template: PiketAssignment[] = [];
+  let cursor = 0;
+  for (let day = 1; day <= 6; day++) {
+    for (const t of tasks) {
+      template.push({ id: uid(), taskId: t.id, day, userId: staff[cursor % staff.length].id });
+      cursor++;
     }
   }
 
-  const redemptions: Redemption[] = [
-    { id: uid(), userId: "u3", itemId: "i6", cost: 40, date: dayKey(addDays(now, -5)) },
-    { id: uid(), userId: "u4", itemId: "i3", cost: 60, date: dayKey(addDays(now, -12)) },
-  ];
-  redemptions.forEach((r) => {
-    pointEvents.push({ id: uid(), userId: r.userId, delta: -r.cost, date: r.date, label: "Redeemed reward" });
-    const u = users.find((x) => x.id === r.userId);
-    if (u) u.points = Math.max(0, u.points - r.cost);
+  const attendance: Attendance[] = [];
+  const piketLog: PiketLog[] = [];
+  const pointEvents: PointEvent[] = [];
+  const leaves: Leave[] = [];
+  const rng = mulberry(42);
+
+  staff.forEach((u, ui) => {
+    const leaveDays = new Set<number>();
+    const nLeaves = Math.floor(rng() * 3);
+    for (let l = 0; l < nLeaves; l++) leaveDays.add(5 + Math.floor(rng() * 70));
+    for (let back = 77; back >= 0; back--) {
+      const d = addDays(new Date(), -back);
+      const wd = d.getDay();
+      if (wd === 0) continue; // Sunday rest
+      const k = dayKey(d);
+      const isToday = back === 0;
+      if (leaveDays.has(back)) {
+        leaves.push({ id: uid(), userId: u.id, date: k, reason: ui % 2 ? "Family matter" : "Sick leave", status: "approved", createdAt: k + "T07:00:00" });
+        continue;
+      }
+      if (isToday && rng() < 0.22) continue; // not yet checked in
+      const lateRoll = rng();
+      const late = lateRoll > (ui === 2 ? 0.6 : 0.85);
+      const inMin = late ? 15 + Math.floor(rng() * 40) : -10 + Math.floor(rng() * 18);
+      const inD = new Date(d); inD.setHours(8, inMin, Math.floor(rng() * 60), 0);
+      const outD = new Date(d);
+      outD.setHours(isToday ? new Date().getHours() - 1 : 17, 5 + Math.floor(rng() * 50), 0, 0);
+      const early = !isToday && rng() > 0.92;
+      if (early) outD.setHours(15, 30, 0, 0);
+      attendance.push({
+        id: uid(), userId: u.id, date: k,
+        checkIn: inD.toISOString(), checkOut: isToday && rng() < 0.5 ? undefined : outD.toISOString(),
+        late, early, inScore: 84 + Math.floor(rng() * 15), distance: 8 + Math.floor(rng() * 60),
+        method: rng() > 0.25 ? "face" : "qr",
+      });
+    }
   });
 
-  const dk = (n: number) => dayKey(addDays(now, n));
-  const ot: OTReq[] = [
-    { id: uid(), userId: "u3", date: dk(-6), start: "17:00", end: "20:30", reason: "Inbound container backlog — dock 2", photo: true, status: "approved", by: "Andi Setiawan", createdAt: dk(-6) },
-    { id: uid(), userId: "u3", date: dk(-2), start: "17:00", end: "19:00", reason: "Cycle count assist zone B", photo: false, status: "approved", by: "Andi Setiawan", createdAt: dk(-2) },
-    { id: uid(), userId: "u3", date: dk(-1), start: "17:30", end: "21:00", reason: "Urgent outbound — retail chain order", photo: true, status: "pending", createdAt: dk(-1) },
-    { id: uid(), userId: "u5", date: dk(-1), start: "22:00", end: "01:00", reason: "Night inbound — cold storage", photo: false, status: "pending", createdAt: dk(-1) },
-    { id: uid(), userId: "u6", date: dk(-4), start: "17:00", end: "18:30", reason: "Label reprint batch 44", photo: false, status: "rejected", note: "Overlaps with scheduled piket", by: "Andi Setiawan", createdAt: dk(-4) },
-    { id: uid(), userId: "u7", date: dk(-8), start: "06:00", end: "08:00", reason: "QA sampling — imported SKU", photo: true, status: "approved", by: "Andi Setiawan", createdAt: dk(-8) },
+  // piket completion history → points ledger
+  for (let back = 13; back >= 0; back--) {
+    const d = addDays(new Date(), -back);
+    const wd = d.getDay();
+    if (wd === 0) continue;
+    const k = dayKey(d);
+    const isToday = back === 0;
+    for (const a of template) {
+      if (a.day !== wd) continue;
+      const task = tasks.find((x) => x.id === a.taskId)!;
+      const p = isToday ? 0.35 : 0.78;
+      if (rng() < p) {
+        piketLog.push({ id: uid(), date: k, taskId: task.id, userId: a.userId, doneAt: k + "T17:30:00", proof: task.requiresProof, points: task.points });
+        pointEvents.push({ id: uid(), userId: a.userId, date: k, delta: task.points, label: `${task.name} piket` });
+      }
+    }
+  }
+
+  const ot: Overtime[] = [];
+  for (let i = 0; i < 14; i++) {
+    const u = staff[Math.floor(rng() * staff.length)];
+    const back = Math.floor(rng() * 30);
+    const d = addDays(new Date(), -back);
+    const startH = 17 + Math.floor(rng() * 2);
+    const dur = 1 + Math.floor(rng() * 3);
+    const status: Overtime["status"] = back > 3 ? (rng() > 0.2 ? "approved" : "rejected") : "pending";
+    const date = dayKey(d);
+    const createdAt = date + "T16:40:00";
+    ot.push({
+      id: uid(), userId: u.id, date,
+      start: `${String(startH).padStart(2, "0")}:00`, end: `${String(startH + dur).padStart(2, "0")}:00`,
+      reason: ["Container unloading overflow", "Monthly stock opname", "Delayed inbound truck", "Repacking export order", "System migration support"][Math.floor(rng() * 5)],
+      status, note: status === "rejected" ? "Overlaps with scheduled shift" : undefined,
+      createdAt, decidedAt: status !== "pending" ? date + "T20:00:00" : undefined,
+    });
+    if (status === "approved") pointEvents.push({ id: uid(), userId: u.id, date, delta: 5, label: "Overtime bonus" });
+  }
+  ot.push({ id: uid(), userId: staff[1].id, date: todayKey(), start: "17:00", end: "20:00", reason: "Cold-chain container monitoring", status: "pending", createdAt: todayKey() + "T09:10:00" });
+
+  const items: RedeemItem[] = [
+    { id: "i-1", name: "Safety gloves (premium)", cost: 120, stock: 14, icon: "package", cat: "Essentials" },
+    { id: "i-2", name: "Coffee voucher", cost: 60, stock: 25, icon: "cup", cat: "Voucher" },
+    { id: "i-3", name: "Hi-vis vest (new)", cost: 150, stock: 8, icon: "shield", cat: "Gear" },
+    { id: "i-4", name: "Snack box", cost: 40, stock: 30, icon: "snack", cat: "Essentials" },
+    { id: "i-5", name: "Parking voucher (1 week)", cost: 100, stock: 12, icon: "ticket", cat: "Voucher" },
+    { id: "i-6", name: "Tumbler ShiftGate", cost: 200, stock: 6, icon: "package", cat: "Gear" },
   ];
 
-  const leaves: LeaveReq[] = [
-    { id: uid(), userId: "u4", from: dk(-34), to: dk(-32), reason: "Family wedding — Yogyakarta", status: "approved", createdAt: dk(-40) },
-    { id: uid(), userId: "u6", from: dk(6), to: dk(7), reason: "Medical check-up", status: "pending", createdAt: dk(-1) },
+  const redemptions: Redemption[] = [];
+  for (let i = 0; i < 6; i++) {
+    const u = staff[Math.floor(rng() * staff.length)];
+    const it = items[Math.floor(rng() * items.length)];
+    const date = dayKey(addDays(new Date(), -Math.floor(rng() * 40)));
+    redemptions.push({ id: uid(), userId: u.id, itemId: it.id, date, cost: it.cost });
+    pointEvents.push({ id: uid(), userId: u.id, date, delta: -it.cost, label: `Redeemed: ${it.name}` });
+  }
+
+  // compute balances
+  for (const u of users) u.points = Math.max(0, pointEvents.filter((p) => p.userId === u.id).reduce((s, p) => s + p.delta, 0));
+
+  const notifications: Notif[] = [
+    { id: uid(), userId: "*", title: "Welcome to ShiftGate", body: "Attendance, piket duty, overtime and rewards now live in one app.", date: new Date(Date.now() - 86400000 * 2).toISOString(), readBy: [] },
+    { id: uid(), userId: "*", title: "Stock opname — Friday", body: "Cycle count for Zone C starts 16:00. Piket Belakang is doubled that day.", date: new Date(Date.now() - 86400000).toISOString(), readBy: [] },
   ];
 
   const announcements: Announcement[] = [
-    { id: uid(), title: "Cycle count — Zone C", body: "Full cycle count this Saturday 08:00. QA + Inventory report to Zone C gate. Piket points doubled for volunteers.", author: "Andi Setiawan", date: dk(-1), pinned: true },
-    { id: uid(), title: "Hi-vis vest policy", body: "Vests mandatory beyond the yellow line from Monday. Non-compliance logged by safety officer.", author: "Andi Setiawan", date: dk(-4), pinned: false },
-    { id: uid(), title: "Night shift meal allowance", body: "Rp 25k meal allowance now auto-added for Night piket. Check your points ledger after each duty.", author: "Andi Setiawan", date: dk(-9), pinned: false },
+    { id: uid(), title: "Cold-chain audit this week", body: "Container 20ft and 40ft temperature photos are mandatory twice per shift until Friday. QA will cross-check the piket proof gallery every evening. Points for Foto Suhu tasks are doubled during the audit.", author: "Rina Wijaya", date: todayKey(), pinned: true },
+    { id: uid(), title: "New rolling door procedure", body: "Rolling doors 3 and 4 must be closed and photographed before 21:00. The piket assignee is responsible — failure is logged in the weekly review.", author: "Budi Santoso", date: dayKey(addDays(new Date(), -1)), pinned: false },
+    { id: uid(), title: "Forklift charging bay moved", body: "Starting Monday, forklifts charge at Bay 7. Do not block the outbound lane after 15:00.", author: "Rina Wijaya", date: dayKey(addDays(new Date(), -3)), pinned: false },
   ];
 
-  const notis: Noti[] = [
-    { id: uid(), to: "u3", text: "Your overtime on " + dk(-6) + " was approved (3.5h).", date: dk(-5), readBy: [], kind: "ok" },
-    { id: uid(), to: "all", text: "Night roster for next week has been posted.", date: dk(-1), readBy: [], kind: "info" },
-    { id: uid(), to: "all", text: "Snack Box stock is running low — 60 left.", date: dk(-2), readBy: [], kind: "warn" },
-  ];
+  return { version: VERSION, settings: { ...defaultSettings }, users, attendance, tasks, template, piketLog, ot, pointEvents, redemptions, items, announcements, notifications, leaves };
+}
 
-  return {
-    v: 1, users, shifts: SHIFTS, attendance, schedules, pointEvents, ot, leaves,
-    items: ITEMS, redemptions, announcements, notis, settings,
+function mulberry(a: number) {
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-/* ================= store core ================= */
-let db: DB | null = load();
-const listeners = new Set<() => void>();
-
-function load(): DB | null {
+/* ================= lifecycle ================= */
+export function initStore() {
+  if (cache) return;
   try {
-    const raw = localStorage.getItem(LS_DB);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as DB;
-    return parsed && parsed.v === 1 ? parsed : null;
+    const raw = localStorage.getItem(DB_KEY);
+    const parsed = raw ? (JSON.parse(raw) as DB) : null;
+    cache = parsed && parsed.version === VERSION ? parsed : seed();
+    if (!parsed || parsed.version !== VERSION) persist();
   } catch {
-    return null;
+    cache = seed();
+    persist();
   }
 }
-function persist() {
-  try {
-    if (db) localStorage.setItem(LS_DB, JSON.stringify(db));
-  } catch { /* storage full — demo continues in memory */ }
-}
-function emit() {
-  persist();
-  listeners.forEach((l) => l());
-}
-export function subscribe(fn: () => void) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-export function getDB(): DB | null {
-  return db;
-}
-export function useDB(): DB | null {
-  return useSyncExternalStore(subscribe, getDB);
-}
-export function isSetupDone(): boolean {
-  return db !== null;
-}
-function mut(fn: (d: DB) => void) {
-  if (!db) return;
-  const next: DB = { ...db };
-  fn(next);
-  db = next;
-  emit();
+
+export function hasWorkspace() {
+  initStore();
+  return cache!.users.some((u) => u.role === "superadmin");
 }
 
-/* ================= session ================= */
-export function getSessionUser(): User | null {
-  if (!db) return null;
-  try {
-    const raw = localStorage.getItem(LS_SES) || sessionStorage.getItem(LS_SES);
-    if (!raw) return null;
-    const { userId } = JSON.parse(raw) as { userId: string };
-    return db.users.find((u) => u.id === userId) ?? null;
-  } catch {
-    return null;
-  }
-}
-export function login(email: string, password: string, remember: boolean): { user?: User; error?: string } {
-  if (!db) return { error: "Run setup first" };
-  const u = db.users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-  if (!u) return { error: "No account found for that email" };
-  if (u.password !== password) return { error: "Incorrect password" };
-  if (!u.active) return { error: "This account has been deactivated" };
-  try {
-    const store = remember ? localStorage : sessionStorage;
-    store.setItem(LS_SES, JSON.stringify({ userId: u.id, remember }));
-  } catch { /* ignore */ }
-  return { user: u };
-}
-export function logout() {
-  try {
-    localStorage.removeItem(LS_SES);
-    sessionStorage.removeItem(LS_SES);
-  } catch { /* ignore */ }
-  emit();
-}
-
-/* ================= setup & lifecycle ================= */
-export interface SetupPayload {
-  appName: string; company: string; logo?: string; hue: number;
-  siteName: string; lat: number; lng: number; radius: number;
-  adminName: string; adminEmail: string; adminPassword: string;
-}
-export function completeSetup(p: SetupPayload) {
-  const superAdmin: User = {
-    id: "u1", name: p.adminName, email: p.adminEmail, password: p.adminPassword,
-    role: "superadmin", employeeId: "WMS-000", department: "Management", hue: p.hue,
-    faceEnrolled: true, faceHash: "root0000", active: true, joinedAt: new Date().toISOString(), points: 0,
-  };
-  const settings: Settings = {
-    appName: p.appName, company: p.company, logo: p.logo, hue: p.hue,
-    siteName: p.siteName, lat: p.lat, lng: p.lng, radius: p.radius,
-    lateTime: "08:00", pointsExpiryMonths: 12, theme: "dark",
-  };
-  db = buildSeed(superAdmin, settings);
-  emit();
-}
-export function resetDemoData() {
-  if (!db) return;
-  const fresh = buildSeed(null, db.settings);
-  fresh.users = [
-    ...db.users.filter((u) => u.role === "superadmin"),
-    ...fresh.users,
-  ];
-  db = fresh;
-  emit();
-}
 export function rerunSetup() {
-  try {
-    localStorage.removeItem(LS_DB);
-  } catch { /* ignore */ }
-  db = null;
+  try { localStorage.removeItem(DB_KEY); sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
+  cache = null;
+  initStore();
+  const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [] };
+  cache = fresh;
+  persist();
   emit();
 }
+
+export function resetDemoData() {
+  if (!cache) return;
+  const keep = { settings: cache.settings, users: cache.users };
+  const fresh = seed();
+  cache = { ...fresh, settings: cache.settings, users: cache.users.map((u) => ({ ...u, points: fresh.users.find((f) => f.id === u.id)?.points ?? 0 })) };
+  void keep;
+  persist(); emit();
+}
+
+export function completeSetup(args: { appName: string; company: string; logo?: string; hue: number; siteName: string; lat: number; lng: number; radius: number; adminName: string; adminEmail: string; adminPassword: string }) {
+  initStore();
+  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Operations", args.hue, args.adminPassword);
+  cache = {
+    ...seed(),
+    settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
+    users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [],
+    announcements: [{ id: uid(), title: "Workspace ready", body: "Add staff accounts, then build the weekly piket template in the Piket tab.", author: args.adminName, date: todayKey(), pinned: true }],
+  };
+  persist(); emit();
+}
+
+/* ================= auth ================= */
+export function login(email: string, password: string, remember: boolean): { ok: boolean; user?: User; msg?: string } {
+  initStore();
+  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
+  if (!u || u.password !== password) return { ok: false, msg: "Invalid email or password." };
+  if (!u.active) return { ok: false, msg: "This account has been deactivated. Contact your admin." };
+  const session = { userId: u.id, exp: Date.now() + 60 * 60 * 1000 }; // JWT-style 1h expiry
+  const store = remember ? localStorage : sessionStorage;
+  store.setItem(SESSION_KEY, JSON.stringify(session));
+  if (remember) localStorage.setItem(REMEMBER_KEY, "1");
+  emit();
+  return { ok: true, user: u };
+}
+
+export function logout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  emit();
+}
+
+export function getSessionUser(): User | null {
+  initStore();
+  const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+  try {
+    const s = JSON.parse(raw) as { userId: string; exp: number };
+    if (Date.now() > s.exp) { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); return null; }
+    return cache!.users.find((u) => u.id === s.userId) ?? null;
+  } catch { return null; }
+}
+
+export function requestReset(email: string): { ok: boolean; msg: string } {
+  initStore();
+  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
+  if (!u) return { ok: false, msg: "No account found for that email." };
+  pushNotif(u.id, "Password reset", `Reset link sent to ${u.email} (valid 30 min).`);
+  return { ok: true, msg: `Reset link sent to ${u.email}.` };
+}
+
+export const userById = (id: string) => cache?.users.find((u) => u.id === id);
+export const userName = (id: string) => userById(id)?.name ?? "Unknown";
 
 /* ================= notifications ================= */
-export function notify(to: string, text: string, kind: Noti["kind"] = "info") {
-  mut((d) => {
-    d.notis = [{ id: uid(), to, text, date: todayKey(), readBy: [], kind }, ...d.notis];
-  });
+function pushNotif(userId: string, title: string, body: string) {
+  if (!cache) return;
+  cache.notifications.unshift({ id: uid(), userId, title, body, date: new Date().toISOString(), readBy: [] });
 }
-export function unreadCount(userId: string): number {
-  if (!db) return 0;
-  return db.notis.filter((n) => (n.to === userId || n.to === "all") && !n.readBy.includes(userId)).length;
-}
+export const unreadCount = (userId: string) =>
+  (cache?.notifications ?? []).filter((n) => (n.userId === "*" || n.userId === userId) && !n.readBy.includes(userId)).length;
 export function markNotisRead(userId: string) {
-  mut((d) => {
-    d.notis = d.notis.map((n) =>
-      (n.to === userId || n.to === "all") && !n.readBy.includes(userId)
-        ? { ...n, readBy: [...n.readBy, userId] }
-        : n
-    );
-  });
+  if (!cache) return;
+  cache.notifications.forEach((n) => { if ((n.userId === "*" || n.userId === userId) && !n.readBy.includes(userId)) n.readBy.push(userId); });
+  mutate();
+}
+export function setNotifPref(userId: string, on: boolean) {
+  const u = userById(userId); if (!u) return; u.notifApproval = on; mutate();
 }
 
 /* ================= attendance ================= */
-export function todayRecord(userId: string): Attendance | undefined {
-  return db?.attendance.find((a) => a.userId === userId && a.date === todayKey());
-}
-export function punch(
-  userId: string,
-  kind: "in" | "out",
-  p: { score?: number; distance: number; method: Attendance["method"] }
-): Attendance | null {
-  if (!db) return null;
-  const date = todayKey();
-  const nowIso = new Date().toISOString();
-  let rec: Attendance | null = null;
-  mut((d) => {
-    const existing = d.attendance.find((a) => a.userId === userId && a.date === date);
-    if (kind === "in") {
-      if (existing?.checkIn) { rec = existing; return; }
-      const late = isAfter(new Date().toTimeString().slice(0, 5), d.settings.lateTime);
-      const entry: Attendance = existing
-        ? { ...existing, checkIn: nowIso, inScore: p.score, distance: p.distance, method: p.method, late, selfReport: false }
-        : { id: uid(), userId, date, checkIn: nowIso, inScore: p.score, distance: p.distance, method: p.method, late, earlyOut: false };
-      rec = entry;
-      d.attendance = existing
-        ? d.attendance.map((a) => (a.id === existing.id ? entry : a))
-        : [...d.attendance, entry];
-    } else {
-      if (!existing?.checkIn) return;
-      const earlyOut = isAfter("16:00", new Date().toTimeString().slice(0, 5));
-      const entry = { ...existing, checkOut: nowIso, outScore: p.score, earlyOut };
-      rec = entry;
-      d.attendance = d.attendance.map((a) => (a.id === existing.id ? entry : a));
-    }
-  });
+export const todayRecord = (userId: string) => cache?.attendance.find((a) => a.userId === userId && a.date === todayKey());
+
+export function punch(userId: string, kind: "in" | "out", opts: { score?: number; distance?: number; method: "face" | "qr" }): Attendance | null {
+  if (!cache) return null;
+  const now = new Date();
+  let rec = todayRecord(userId);
+  const late = kind === "in" && `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` > cache.settings.lateTime;
+  if (!rec) {
+    rec = { id: uid(), userId, date: todayKey(), late: false, early: false };
+    cache.attendance.push(rec);
+  }
+  if (kind === "in") Object.assign(rec, { checkIn: now.toISOString(), inScore: opts.score, distance: opts.distance, method: opts.method, late });
+  else {
+    const early = now.getHours() < 16;
+    Object.assign(rec, { checkOut: now.toISOString(), outScore: opts.score, early });
+  }
+  if (userById(userId)?.notifApproval) pushNotif(userId, kind === "in" ? "Check-in recorded" : "Check-out recorded", `${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${opts.method === "face" ? `face match ${opts.score}%` : "QR badge"}${late ? " · late" : ""}`);
+  mutate();
   return rec;
-}
-export function selfReport(userId: string): Attendance | null {
-  if (!db) return null;
-  const date = todayKey();
-  const nowIso = new Date().toISOString();
-  let rec: Attendance | null = null;
-  mut((d) => {
-    const existing = d.attendance.find((a) => a.userId === userId && a.date === date);
-    const late = isAfter(new Date().toTimeString().slice(0, 5), d.settings.lateTime);
-    const entry: Attendance = existing
-      ? { ...existing, checkIn: nowIso, method: "manual", selfReport: true, late }
-      : { id: uid(), userId, date, checkIn: nowIso, method: "manual", selfReport: true, late, earlyOut: false, distance: 0 };
-    rec = entry;
-    d.attendance = existing ? d.attendance.map((a) => (a.id === existing.id ? entry : a)) : [...d.attendance, entry];
-  });
-  mut((d) => {
-    d.users.filter((u) => u.role !== "staff").forEach((adm) => {
-      d.notis = [{ id: uid(), to: adm.id, text: `${userName(userId)} self-reported attendance — needs review.`, date, readBy: [], kind: "warn" }, ...d.notis];
-    });
-  });
-  return rec;
-}
-export function reviewSelfReport(attId: string, approve: boolean) {
-  mut((d) => {
-    const rec = d.attendance.find((a) => a.id === attId);
-    if (!rec) return;
-    if (approve) {
-      d.attendance = d.attendance.map((a) => (a.id === attId ? { ...a, selfReport: false, reviewed: true } : a));
-      d.notis = [{ id: uid(), to: rec.userId, text: `Self-reported attendance on ${rec.date} was approved.`, date: todayKey(), readBy: [], kind: "ok" }, ...d.notis];
-    } else {
-      d.attendance = d.attendance.filter((a) => a.id !== attId);
-      d.notis = [{ id: uid(), to: rec.userId, text: `Self-reported attendance on ${rec.date} was rejected.`, date: todayKey(), readBy: [], kind: "warn" }, ...d.notis];
-    }
-  });
-}
-export function manualLog(userId: string, date: string, inT: string, outT?: string) {
-  mut((d) => {
-    const mk = (t?: string) => {
-      if (!t) return undefined;
-      const [h, m] = t.split(":").map(Number);
-      const c = parseKey(date);
-      c.setHours(h, m, 0, 0);
-      return c.toISOString();
-    };
-    const late = isAfter(inT, d.settings.lateTime);
-    d.attendance = [...d.attendance, {
-      id: uid(), userId, date, checkIn: mk(inT), checkOut: mk(outT),
-      distance: 0, method: "manual", reviewed: true, late, earlyOut: false,
-    }];
-    d.notis = [{ id: uid(), to: userId, text: `Admin logged manual attendance for ${date}.`, date: todayKey(), readBy: [], kind: "info" }, ...d.notis];
-  });
 }
 
-/* ================= roster & points ================= */
-export function assignShift(userId: string, date: string, shiftId: string) {
-  mut((d) => {
-    const existing = d.schedules.find((s) => s.userId === userId && s.date === date);
-    if (existing) d.schedules = d.schedules.map((s) => (s.id === existing.id ? { ...s, shiftId } : s));
-    else d.schedules = [...d.schedules, { id: uid(), userId, date, shiftId, done: false, proof: false }];
-    d.notis = [{ id: uid(), to: userId, text: `Piket assigned: ${shiftName(d, shiftId)} on ${date}.`, date: todayKey(), readBy: [], kind: "info" }, ...d.notis];
-  });
+export function selfReport(userId: string) {
+  if (!cache) return;
+  let rec = todayRecord(userId);
+  if (!rec) { rec = { id: uid(), userId, date: todayKey(), late: false, early: false }; cache.attendance.push(rec); }
+  const now = new Date();
+  if (!rec.checkIn) Object.assign(rec, { checkIn: now.toISOString(), method: "manual", selfReport: true, late: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` > cache.settings.lateTime });
+  else if (!rec.checkOut) Object.assign(rec, { checkOut: now.toISOString(), selfReport: true });
+  cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Self-report submitted", `${userName(userId)} logged attendance manually — please review in Live board.`));
+  mutate();
 }
-export function removeSchedule(id: string) {
-  mut((d) => { d.schedules = d.schedules.filter((s) => s.id !== id); });
+
+export function manualLog(userId: string, date: string, checkIn: string, checkOut?: string) {
+  if (!cache) return;
+  const rec = cache.attendance.find((a) => a.userId === userId && a.date === date);
+  const [h, m] = checkIn.split(":").map(Number);
+  const inISO = new Date(parseKey(date)); inISO.setHours(h, m, 0, 0);
+  let outISO: string | undefined;
+  if (checkOut) { const [h2, m2] = checkOut.split(":").map(Number); const o = new Date(parseKey(date)); o.setHours(h2, m2, 0, 0); outISO = o.toISOString(); }
+  const late = checkIn > cache.settings.lateTime;
+  if (rec) Object.assign(rec, { checkIn: inISO.toISOString(), checkOut: outISO ?? rec.checkOut, method: "manual" as const, late });
+  else cache.attendance.push({ id: uid(), userId, date, checkIn: inISO.toISOString(), checkOut: outISO, late, early: false, method: "manual" });
+  pushNotif(userId, "Attendance adjusted", `Admin logged your attendance for ${fmtDate(date)}.`);
+  mutate();
 }
-export function autofillWeek(monday: Date) {
-  mut((d) => {
-    const staff = d.users.filter((u) => u.role === "staff" && u.active);
-    const keys: string[] = [];
-    for (let i = 0; i < 6; i++) keys.push(dayKey(addDays(monday, i)));
-    const next = d.schedules.filter((s) => !keys.includes(s.date));
-    keys.forEach((key, dow) => {
-      staff.forEach((u, ui) => {
-        next.push({ id: uid(), userId: u.id, date: key, shiftId: d.shifts[(ui + dow) % d.shifts.length].id, done: false, proof: false });
-      });
-    });
-    d.schedules = next;
-  });
+
+export function reviewSelfReport(recId: string, approve: boolean) {
+  if (!cache) return;
+  const rec = cache.attendance.find((a) => a.id === recId);
+  if (!rec) return;
+  if (approve) { rec.selfReport = false; pushNotif(rec.userId, "Self-report approved", `Your manual attendance on ${fmtDate(rec.date)} was accepted.`); }
+  else { cache.attendance = cache.attendance.filter((a) => a.id !== recId); pushNotif(rec.userId, "Self-report rejected", `Your manual attendance on ${fmtDate(rec.date)} was removed. Contact your admin.`); }
+  mutate();
 }
-export function markDutyDone(schedId: string) {
-  mut((d) => {
-    const s = d.schedules.find((x) => x.id === schedId);
-    if (!s || s.done) return;
-    const shift = d.shifts.find((x) => x.id === s.shiftId)!;
-    d.schedules = d.schedules.map((x) => (x.id === schedId ? { ...x, done: true, proof: true } : x));
-    d.pointEvents = [{ id: uid(), userId: s.userId, delta: shift.points, date: s.date, label: `Piket ${shift.name}` }, ...d.pointEvents];
-    d.users = d.users.map((u) => (u.id === s.userId ? { ...u, points: u.points + shift.points } : u));
-    d.notis = [{ id: uid(), to: s.userId, text: `Duty proof accepted — +${shift.points} pts (${shift.name} piket).`, date: todayKey(), readBy: [], kind: "ok" }, ...d.notis];
-  });
+
+/* ================= piket ================= */
+export const piketForDate = (date: string): { task: PiketTask; assign: PiketAssignment; log?: PiketLog }[] => {
+  if (!cache) return [];
+  const wd = parseKey(date).getDay();
+  if (wd === 0 || wd > 6) return [];
+  return cache.template
+    .filter((a) => a.day === wd)
+    .map((a) => ({ a, task: cache!.tasks.find((t) => t.id === a.taskId) }))
+    .filter((x): x is { a: PiketAssignment; task: PiketTask } => !!x.task && x.task.active)
+    .map(({ a, task }) => ({ task, assign: a, log: cache!.piketLog.find((l) => l.date === date && l.taskId === task.id && l.userId === a.userId) }));
+};
+
+export const myPiketToday = (userId: string) => piketForDate(todayKey()).filter((r) => r.assign.userId === userId);
+
+export function completePiket(date: string, taskId: string, userId: string, proof: boolean): { ok: boolean; msg: string; points: number } {
+  if (!cache) return { ok: false, msg: "Store not ready", points: 0 };
+  const task = cache.tasks.find((t) => t.id === taskId);
+  if (!task) return { ok: false, msg: "Task not found", points: 0 };
+  if (cache.piketLog.some((l) => l.date === date && l.taskId === taskId && l.userId === userId))
+    return { ok: false, msg: "Already completed for this date", points: 0 };
+  cache.piketLog.push({ id: uid(), date, taskId, userId, doneAt: new Date().toISOString(), proof, points: task.points });
+  cache.pointEvents.push({ id: uid(), userId, date, delta: task.points, label: `${task.name} piket` });
+  const u = userById(userId); if (u) u.points += task.points;
+  pushNotif(userId, "Piket completed", `${task.name} · +${task.points} pts credited.`);
+  mutate();
+  return { ok: true, msg: `+${task.points} pts`, points: task.points };
 }
+
+export function setAssignment(taskId: string, day: number, userId: string | null) {
+  if (!cache) return;
+  const existing = cache.template.find((a) => a.taskId === taskId && a.day === day);
+  if (userId === null) cache.template = cache.template.filter((a) => !(a.taskId === taskId && a.day === day));
+  else if (existing) existing.userId = userId;
+  else cache.template.push({ id: uid(), taskId, day, userId });
+  mutate();
+}
+
+export function saveTask(input: { id?: string; name: string; area: string; points: number; requiresProof: boolean; desc: string; icon: PiketTask["icon"]; active: boolean }) {
+  if (!cache) return;
+  if (input.id) {
+    const t = cache.tasks.find((x) => x.id === input.id);
+    if (t) Object.assign(t, input);
+  } else {
+    cache.tasks.push({ id: uid(), ...input });
+  }
+  mutate();
+}
+
+export function deleteTask(id: string) {
+  if (!cache) return;
+  cache.tasks = cache.tasks.filter((t) => t.id !== id);
+  cache.template = cache.template.filter((a) => a.taskId !== id);
+  mutate();
+}
+
+export function rotateTemplate() {
+  if (!cache) return;
+  for (let day = 1; day <= 6; day++) {
+    const rows = cache.template.filter((a) => a.day === day);
+    if (rows.length < 2) continue;
+    const ids = rows.map((r) => r.userId);
+    const rotated = [ids[ids.length - 1], ...ids.slice(0, ids.length - 1)];
+    rows.forEach((r, i) => { r.userId = rotated[i]; });
+  }
+  mutate();
+}
+
+/* ================= overtime ================= */
+export function otHours(o: Overtime) {
+  return Math.max(0, hoursBetween(o.start, o.end));
+}
+
+export function submitOvertime(userId: string, date: string, start: string, end: string, reason: string): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  if (hoursBetween(start, end) <= 0) return { ok: false, msg: "End time must be after start time." };
+  if (cache.ot.some((o) => o.userId === userId && o.date === date && o.status !== "rejected" && !(end <= o.start || start >= o.end)))
+    return { ok: false, msg: "Overlaps an existing request on this date." };
+  cache.ot.unshift({ id: uid(), userId, date, start, end, reason, status: "pending", createdAt: new Date().toISOString() });
+  cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Overtime request", `${userName(userId)} · ${fmtDate(date)} · ${hoursBetween(start, end)}h`));
+  mutate();
+  return { ok: true, msg: "Request submitted for approval." };
+}
+
+export function cancelOvertime(id: string) {
+  if (!cache) return;
+  const o = cache.ot.find((x) => x.id === id);
+  if (o && o.status === "pending") { cache.ot = cache.ot.filter((x) => x.id !== id); mutate(); }
+}
+
+export function decideOvertime(id: string, approve: boolean, note: string, decider: string) {
+  if (!cache) return;
+  const o = cache.ot.find((x) => x.id === id);
+  if (!o || o.status !== "pending") return;
+  o.status = approve ? "approved" : "rejected";
+  o.note = note || undefined;
+  o.decidedAt = new Date().toISOString();
+  if (approve) {
+    cache.pointEvents.push({ id: uid(), userId: o.userId, date: o.date, delta: 5, label: "Overtime bonus" });
+    const u = userById(o.userId); if (u) u.points += 5;
+  }
+  if (userById(o.userId)?.notifApproval) pushNotif(o.userId, approve ? "Overtime approved 🎉" : "Overtime rejected", `${fmtDate(o.date)} · ${otHours(o)}h${note ? ` — "${note}"` : ""} · by ${decider}`);
+  mutate();
+}
+
+/* ================= leaves ================= */
+export function requestLeave(userId: string, date: string, reason: string): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  if (cache.leaves.some((l) => l.userId === userId && l.date === date && l.status !== "rejected")) return { ok: false, msg: "You already requested leave on that date." };
+  cache.leaves.push({ id: uid(), userId, date, reason, status: "pending", createdAt: new Date().toISOString() });
+  cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Leave request", `${userName(userId)} · ${fmtDate(date)}`));
+  mutate();
+  return { ok: true, msg: "Leave request submitted." };
+}
+
+export const leaveBalance = (userId: string) => 12 - (cache?.leaves.filter((l) => l.userId === userId && l.status === "approved").length ?? 0);
+
+/* ================= points & rewards ================= */
 export function grantBonus(userId: string, delta: number, label: string) {
-  mut((d) => {
-    d.pointEvents = [{ id: uid(), userId, delta, date: todayKey(), label }, ...d.pointEvents];
-    d.users = d.users.map((u) => (u.id === userId ? { ...u, points: Math.max(0, u.points + delta) } : u));
-  });
+  if (!cache) return;
+  cache.pointEvents.push({ id: uid(), userId, date: todayKey(), delta, label });
+  const u = userById(userId); if (u) u.points += delta;
+  mutate();
 }
 
-/* ================= overtime & leave ================= */
-export function submitOT(p: { userId: string; date: string; start: string; end: string; reason: string; photo: boolean }) {
-  mut((d) => {
-    d.ot = [{ id: uid(), ...p, status: "pending", createdAt: todayKey() }, ...d.ot];
-    d.users.filter((u) => u.role !== "staff").forEach((adm) => {
-      d.notis = [{ id: uid(), to: adm.id, text: `New overtime request from ${userName(p.userId)} (${p.date}).`, date: todayKey(), readBy: [], kind: "info" }, ...d.notis];
-    });
-  });
-}
-export function cancelOT(id: string) {
-  mut((d) => { d.ot = d.ot.filter((o) => o.id !== id); });
-}
-export function decideOT(id: string, approve: boolean, note: string, byName: string) {
-  mut((d) => {
-    const r = d.ot.find((o) => o.id === id);
-    if (!r) return;
-    d.ot = d.ot.map((o) => (o.id === id ? { ...o, status: approve ? "approved" : "rejected", note: note || undefined, by: byName } : o));
-    d.notis = [{ id: uid(), to: r.userId, text: `Overtime on ${r.date} ${approve ? "approved" : "rejected"}${note ? ` — “${note}”` : ""}.`, date: todayKey(), readBy: [], kind: approve ? "ok" : "warn" }, ...d.notis];
-  });
-}
-export function requestLeave(p: { userId: string; from: string; to: string; reason: string }) {
-  mut((d) => {
-    d.leaves = [{ id: uid(), ...p, status: "pending", createdAt: todayKey() }, ...d.leaves];
-    d.users.filter((u) => u.role !== "staff").forEach((adm) => {
-      d.notis = [{ id: uid(), to: adm.id, text: `${userName(p.userId)} requested leave ${p.from} → ${p.to}.`, date: todayKey(), readBy: [], kind: "info" }, ...d.notis];
-    });
-  });
-}
-export function decideLeave(id: string, approve: boolean) {
-  mut((d) => {
-    const r = d.leaves.find((l) => l.id === id);
-    if (!r) return;
-    d.leaves = d.leaves.map((l) => (l.id === id ? { ...l, status: approve ? "approved" : "rejected" } : l));
-    d.notis = [{ id: uid(), to: r.userId, text: `Leave ${r.from} → ${r.to} ${approve ? "approved" : "rejected"}.`, date: todayKey(), readBy: [], kind: approve ? "ok" : "warn" }, ...d.notis];
-  });
-}
-
-/* ================= redeem ================= */
 export function redeem(userId: string, itemId: string): { ok: boolean; msg: string } {
-  if (!db) return { ok: false, msg: "No data" };
-  const item = db.items.find((i) => i.id === itemId);
-  const user = db.users.find((u) => u.id === userId);
-  if (!item || !user) return { ok: false, msg: "Item not found" };
-  if (item.stock <= 0) return { ok: false, msg: "Out of stock" };
-  if (user.points < item.cost) return { ok: false, msg: `Need ${item.cost - user.points} more pts` };
-  mut((d) => {
-    d.items = d.items.map((i) => (i.id === itemId ? { ...i, stock: i.stock - 1 } : i));
-    d.redemptions = [{ id: uid(), userId, itemId, cost: item.cost, date: todayKey() }, ...d.redemptions];
-    d.pointEvents = [{ id: uid(), userId, delta: -item.cost, date: todayKey(), label: `Redeemed: ${item.name}` }, ...d.pointEvents];
-    d.users = d.users.map((u) => (u.id === userId ? { ...u, points: u.points - item.cost } : u));
-  });
-  return { ok: true, msg: `${item.name} redeemed` };
-}
-export function addItem(p: { name: string; cost: number; stock: number; cat: "Essentials" | "Voucher" | "Gear" }) {
-  mut((d) => {
-    d.items = [...d.items, { id: uid(), name: p.name, cost: p.cost, stock: p.stock, cat: p.cat, icon: "package" }];
-  });
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  const u = userById(userId); const it = cache.items.find((i) => i.id === itemId);
+  if (!u || !it) return { ok: false, msg: "Not found" };
+  if (it.stock <= 0) return { ok: false, msg: "Out of stock" };
+  if (u.points < it.cost) return { ok: false, msg: `Not enough points — you need ${it.cost - u.points} more.` };
+  u.points -= it.cost;
+  it.stock -= 1;
+  cache.redemptions.unshift({ id: uid(), userId, itemId, date: todayKey(), cost: it.cost });
+  cache.pointEvents.push({ id: uid(), userId, date: todayKey(), delta: -it.cost, label: `Redeemed: ${it.name}` });
+  cache.users.filter((x) => x.role !== "staff").forEach((a) => pushNotif(a.id, "Redemption", `${u.name} redeemed ${it.name} (${it.cost} pts).`));
+  mutate();
+  return { ok: true, msg: `${it.name} redeemed` };
 }
 
-/* ================= announcements & staff ================= */
-export function addAnnouncement(p: { title: string; body: string; author: string; pinned: boolean }) {
-  mut((d) => {
-    d.announcements = [{ id: uid(), date: todayKey(), ...p }, ...d.announcements];
-    d.notis = [{ id: uid(), to: "all", text: `Announcement: ${p.title}`, date: todayKey(), readBy: [], kind: "info" }, ...d.notis];
-  });
+export function addItem(input: { name: string; cost: number; stock: number; cat: RedeemItem["cat"] }) {
+  if (!cache) return;
+  cache.items.push({ id: uid(), icon: "package", ...input });
+  mutate();
 }
+
+/* ================= announcements ================= */
+export function addAnnouncement(input: { title: string; body: string; author: string; pinned: boolean }) {
+  if (!cache) return;
+  cache.announcements.unshift({ id: uid(), date: todayKey(), ...input });
+  pushNotif("*", "Announcement", input.title);
+  mutate();
+}
+
 export function deleteAnnouncement(id: string) {
-  mut((d) => { d.announcements = d.announcements.filter((a) => a.id !== id); });
+  if (!cache) return;
+  cache.announcements = cache.announcements.filter((a) => a.id !== id);
+  mutate();
 }
-export function addStaff(p: { name: string; email: string; employeeId: string; role: Role; department: string; password: string }): { ok: boolean; msg: string } {
-  if (!db) return { ok: false, msg: "No data" };
-  if (db.users.some((u) => u.email.toLowerCase() === p.email.toLowerCase())) return { ok: false, msg: "Email already registered" };
-  mut((d) => {
-    d.users = [...d.users, {
-      id: uid(), name: p.name, email: p.email, password: p.password, role: p.role,
-      employeeId: p.employeeId, department: p.department, hue: Math.floor(Math.random() * 360),
-      faceEnrolled: false, faceHash: "", active: true, joinedAt: new Date().toISOString(), points: 0,
-    }];
-  });
-  return { ok: true, msg: `${p.name} added — temp password: ${p.password}` };
+
+/* ================= staff management ================= */
+export function addStaff(input: { name: string; email: string; employeeId: string; role: Role; department: string; password: string }): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  if (cache.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) return { ok: false, msg: "Email already registered." };
+  cache.users.push(mkUser(uid(), input.name, input.email, input.role, input.employeeId, input.department, Math.floor(Math.random() * 360), input.password, false));
+  pushNotif("*", "New team member", `${input.name} joined ${input.department}.`);
+  mutate();
+  return { ok: true, msg: `${input.name} created · temp password ${input.password}` };
 }
-export function toggleActive(id: string) {
-  mut((d) => { d.users = d.users.map((u) => (u.id === id ? { ...u, active: !u.active } : u)); });
+
+export function toggleActive(userId: string) {
+  const u = userById(userId); if (!u) return;
+  u.active = !u.active; mutate();
 }
-export function enrollFace(id: string) {
-  mut((d) => {
-    d.users = d.users.map((u) => (u.id === id ? { ...u, faceEnrolled: true, faceHash: uid().slice(0, 8) } : u));
-  });
+
+export function enrollFace(userId: string) {
+  const u = userById(userId); if (!u) return;
+  u.faceEnrolled = true;
+  pushNotif(userId, "Face enrolled", "Your face descriptor is now active for check-in.");
+  mutate();
 }
+
 export function updateSettings(patch: Partial<Settings>) {
-  mut((d) => { d.settings = { ...d.settings, ...patch }; });
-  if (patch.theme) {
-    try {
-      localStorage.setItem(LS_THEME, patch.theme);
-      document.documentElement.setAttribute("data-theme", patch.theme);
-    } catch { /* ignore */ }
-  }
-}
-export function updateShiftPoints(shiftId: string, points: number) {
-  mut((d) => { d.shifts = d.shifts.map((s) => (s.id === shiftId ? { ...s, points } : s)); });
+  if (!cache) return;
+  cache.settings = { ...cache.settings, ...patch };
+  persist(); emit();
 }
 
-/* ================= selectors ================= */
-export function userName(id: string): string {
-  return db?.users.find((u) => u.id === id)?.name ?? "Staff";
-}
-export function shiftName(d: DB, id: string): string {
-  return d.shifts.find((s) => s.id === id)?.name ?? "—";
-}
-export function notisFor(userId: string): Noti[] {
-  if (!db) return [];
-  return db.notis.filter((n) => n.to === userId || n.to === "all");
+/* ================= supabase deploy ================= */
+export function connectSupabase(url: string, key: string) {
+  updateSettings({ supabase: { url, key, status: "connected", connectedAt: new Date().toISOString() } });
 }
 
-export type DayStatus = "off" | "future" | "absent" | "late" | "early" | "present";
-
-export interface Stats {
-  monthPct: number; lateMonth: number; earlyMonth: number; otHoursMonth: number;
-  otPending: number; leaveUsedYear: number; streak: number; avgIn: string;
-  ytd: { label: string; value: number; current: boolean }[];
-  heat: { key: string; status: DayStatus; in?: string; out?: string; hours: number }[];
-  weeks: number[]; workHoursMonth: number;
+export function syncSupabase(): { pushed: number; pulled: number } {
+  if (!cache) return { pushed: 0, pulled: 0 };
+  const pushed = cache.attendance.length + cache.piketLog.length + cache.ot.length;
+  const pulled = Math.floor(Math.random() * 5);
+  updateSettings({ supabase: { ...cache.settings.supabase, lastSync: new Date().toISOString() } });
+  return { pushed, pulled };
 }
 
-export function statsFor(userId: string): Stats | null {
-  if (!db) return null;
-  const me = db.users.find((u) => u.id === userId);
-  const att = db.attendance.filter((a) => a.userId === userId);
+export function disconnectSupabase() {
+  updateSettings({ supabase: { url: "", key: "", status: "off" } });
+}
+
+/* ================= analytics ================= */
+export interface UserStats {
+  pct: number; lates: number; earlies: number; otHours: number; points: number;
+  leaveDays: number; monthPct: number; ytd: number[]; heat: Record<string, "ok" | "late" | "absent" | "out">;
+  weeks: number[]; streak: number; score: number;
+}
+
+export function perfIndex(pct: number, lates: number, points: number): number {
+  return Math.round(Math.min(100, 0.7 * pct + 0.2 * Math.max(0, 100 - Math.min(lates * 8, 100)) + 0.1 * Math.min(points, 100)));
+}
+
+export function statsFor(userId: string): UserStats | null {
+  if (!cache) return null;
+  const u = userById(userId);
+  if (!u) return null;
+  const rows = cache.attendance.filter((a) => a.userId === userId).sort((a, b) => a.date.localeCompare(b.date));
   const now = new Date();
-  const mk = monthKeyLocal(now);
-  const byDate = new Map(att.map((a) => [a.date, a]));
-
-  const workDaysOfMonth = (ym: string, uptoToday: boolean) => {
-    const [y, m] = ym.split("-").map(Number);
-    const days = new Date(y, m, 0).getDate();
-    const out: string[] = [];
-    for (let d = 1; d <= days; d++) {
-      const dt = new Date(y, m - 1, d);
-      if (dt.getDay() === 0) continue;
-      const k = dayKey(dt);
-      if (uptoToday && k > todayKey()) continue;
-      out.push(k);
-    }
-    return out;
-  };
-
-  const pctFor = (keys: string[]) => {
-    if (!keys.length) return 0;
-    const present = keys.filter((k) => byDate.get(k)?.checkIn).length;
-    return Math.round((present / keys.length) * 100);
-  };
-
-  const monthDays = workDaysOfMonth(mk, true);
-  const monthRecs = monthDays.map((k) => byDate.get(k)).filter(Boolean) as Attendance[];
-  const lateMonth = monthRecs.filter((r) => r.late).length;
-  const earlyMonth = monthRecs.filter((r) => r.earlyOut).length;
-  const workHoursMonth = Math.round(
-    monthRecs.reduce((s, r) => (r.checkIn && r.checkOut ? s + (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 36e5 : s), 0)
-  );
-
-  const otMonth = db.ot.filter((o) => o.userId === userId && o.status === "approved" && o.date.startsWith(mk));
-  const otHoursMonth = Math.round(otMonth.reduce((s, o) => s + otHours(o.start, o.end), 0) * 10) / 10;
-  const otPending = db.ot.filter((o) => o.userId === userId && o.status === "pending").length;
-
-  const leaveUsedYear = db.leaves
-    .filter((l) => l.userId === userId && l.status === "approved" && l.from.startsWith(String(now.getFullYear())))
-    .reduce((s, l) => s + Math.max(1, Math.round((parseKey(l.to).getTime() - parseKey(l.from).getTime()) / 864e5) + 1), 0);
-
-  // on-time streak over workdays walking back from today
-  let streak = 0;
-  for (let i = 0; i < 60; i++) {
-    const k = dayKey(addDays(now, -i));
-    const d = parseKey(k);
-    if (d.getDay() === 0) continue;
-    if (k > todayKey()) continue;
-    const r = byDate.get(k);
-    if (!r) break;
-    if (r.late) break;
-    streak++;
-  }
-
-  const ins = monthRecs.filter((r) => r.checkIn).map((r) => new Date(r.checkIn!));
-  const avgMin = ins.length ? Math.round(ins.reduce((s, d) => s + d.getHours() * 60 + d.getMinutes(), 0) / ins.length) : 0;
-  const avgIn = ins.length ? `${pad2(Math.floor(avgMin / 60))}:${pad2(avgMin % 60)}` : "—";
-
-  // YTD bars
-  const ytd: Stats["ytd"] = [];
-  for (let m = 0; m <= now.getMonth(); m++) {
-    const ym = `${now.getFullYear()}-${pad2(m + 1)}`;
-    ytd.push({
-      label: new Date(now.getFullYear(), m, 1).toLocaleDateString("en", { month: "narrow" }),
-      value: pctFor(workDaysOfMonth(ym, true)),
-      current: m === now.getMonth(),
-    });
-  }
-
-  // heatmap for current month
-  const [hy, hm] = mk.split("-").map(Number);
-  const daysInMonth = new Date(hy, hm, 0).getDate();
-  const heat: Stats["heat"] = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dt = new Date(hy, hm - 1, d);
-    const k = dayKey(dt);
-    const r = byDate.get(k);
-    let status: DayStatus = "future";
-    if (dt.getDay() === 0) status = "off";
-    else if (k < todayKey()) {
-      if (!r?.checkIn) status = "absent";
-      else if (r.late) status = "late";
-      else if (r.earlyOut) status = "early";
-      else status = "present";
-    } else if (k === todayKey()) {
-      status = r?.checkIn ? (r.late ? "late" : "present") : "absent";
-    }
-    const hours = r?.checkIn && r.checkOut ? Math.round(((new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 36e5) * 10) / 10 : r?.checkIn ? 0 : 0;
-    heat.push({ key: k, status, in: r?.checkIn, out: r?.checkOut, hours });
-  }
-
-  // last 8 weeks trend
-  const weeks: number[] = [];
+  const ym = now.toISOString().slice(0, 7);
+  const monthRows = rows.filter((r) => r.date.startsWith(ym));
+  const present = rows.filter((r) => r.checkIn).length;
   const mon = mondayOf(now);
-  for (let w = 7; w >= 0; w--) {
-    const keys: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const k = dayKey(addDays(mon, -w * 7 + i));
-      if (k <= todayKey()) keys.push(k);
-    }
-    weeks.push(pctFor(keys));
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const s = addDays(mon, (i - 7) * 7);
+    const wk = rows.filter((r) => { const d = parseKey(r.date); return d >= s && d < addDays(s, 7) && r.checkIn; }).length;
+    return Math.round((wk / 6) * 100);
+  });
+  const heat: UserStats["heat"] = {};
+  const y1 = new Date(now.getFullYear(), 0, 1);
+  for (let d = new Date(y1); d <= now; d = addDays(d, 1)) {
+    const k = dayKey(d);
+    if (d.getDay() === 0) { heat[k] = "out"; continue; }
+    const r = rows.find((x) => x.date === k);
+    heat[k] = !r || !r.checkIn ? (k > todayKey() ? "out" : "absent") : r.late ? "late" : "ok";
   }
-
+  const lates = rows.filter((r) => r.late).length;
+  const monthDen = Math.max(1, monthRows.length + monthRows.filter((r) => !r.checkIn).length);
+  const pct = rows.length ? Math.round((present / Math.max(rows.length, 1)) * 100) : 0;
   return {
-    monthPct: pctFor(monthDays), lateMonth, earlyMonth, otHoursMonth, otPending,
-    leaveUsedYear, streak, avgIn, ytd, heat, weeks, workHoursMonth,
+    pct: Math.min(100, pct),
+    lates,
+    earlies: rows.filter((r) => r.early).length,
+    otHours: cache.ot.filter((o) => o.userId === userId && o.status === "approved").reduce((s, o) => s + otHours(o), 0),
+    points: u.points,
+    leaveDays: cache.leaves.filter((l) => l.userId === userId && l.status === "approved").length,
+    monthPct: Math.min(100, Math.round((monthRows.filter((r) => r.checkIn).length / monthDen) * 100)),
+    ytd: Array.from({ length: now.getMonth() + 1 }, (_, m) => {
+      const mk = `${now.getFullYear()}-${String(m + 1).padStart(2, "0")}`;
+      const mr = rows.filter((r) => r.date.startsWith(mk) && r.date <= todayKey());
+      return mr.length ? Math.round((mr.filter((r) => r.checkIn).length / mr.length) * 100) : 0;
+    }),
+    heat, weeks,
+    streak: (() => { let s = 0; for (let b = rows.length - 1; b >= 0; b--) { if (rows[b].checkIn && !rows[b].late) s++; else break; } return s; })(),
+    score: perfIndex(Math.min(100, pct), lates, u.points),
   };
 }
 
-export function leaderboard(): { user: User; pct: number }[] {
-  if (!db) return [];
-  const now = new Date();
-  const mk = monthKeyLocal(now);
-  return db.users
+export function leaderboard(): { user: User; stats: UserStats }[] {
+  if (!cache) return [];
+  return cache.users
     .filter((u) => u.role === "staff" && u.active)
-    .map((user) => {
-      const keys: string[] = [];
-      const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      for (let d = 1; d <= days; d++) {
-        const dt = new Date(now.getFullYear(), now.getMonth(), d);
-        if (dt.getDay() === 0) continue;
-        const k = dayKey(dt);
-        if (k <= todayKey()) keys.push(k);
-      }
-      const recs = db!.attendance.filter((a) => a.userId === user.id && a.date.startsWith(mk) && a.checkIn);
-      const pct = keys.length ? Math.round((recs.length / keys.length) * 100) : 0;
-      return { user, pct };
-    })
-    .sort((a, b) => b.pct - a.pct || b.user.points - a.user.points);
+    .map((user) => ({ user, stats: statsFor(user.id)! }))
+    .sort((a, b) => b.stats.score - a.stats.score);
 }
 
-/* local helpers */
-function monthKeyLocal(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+/* ================= misc ================= */
+export function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
-function otHours(start: string, end: string) {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins < 0) mins += 24 * 60;
-  return mins / 60;
-}
-export type { ScheduleEntry };
+
+export const supabaseSQL = `-- ShiftGate schema v1 (PostgreSQL / Supabase)
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null, name text not null,
+  role text check (role in ('superadmin','admin','staff')),
+  employee_id text unique, department text,
+  photo_url text, face_descriptor jsonb, -- encrypted at rest
+  points int default 0, active bool default true,
+  created_at timestamptz default now()
+);
+create table attendance (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  date date not null, check_in timestamptz, check_out timestamptz,
+  late bool default false, early bool default false,
+  in_score int, out_score int, distance_m int,
+  method text check (method in ('face','qr','manual')),
+  self_report bool default false,
+  unique (user_id, date)
+);
+create table piket_tasks (
+  id uuid primary key default gen_random_uuid(),
+  name text not null, area text, points int default 10,
+  requires_proof bool default false, active bool default true,
+  icon text, description text
+);
+create table piket_template (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid references piket_tasks(id) on delete cascade,
+  day int check (day between 1 and 6),
+  user_id uuid references users(id),
+  unique (task_id, day)
+);
+create table piket_log (
+  id uuid primary key default gen_random_uuid(),
+  date date not null, task_id uuid references piket_tasks(id),
+  user_id uuid references users(id), done_at timestamptz,
+  proof_url text, points int,
+  unique (date, task_id, user_id)
+);
+create table overtime (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id), date date not null,
+  start_time time, end_time time, reason text,
+  status text check (status in ('pending','approved','rejected')),
+  note text, created_at timestamptz default now(), decided_at timestamptz
+);
+create table leaves (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id), date date not null,
+  reason text, status text default 'pending', created_at timestamptz default now()
+);
+create table point_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id), date date, delta int, label text
+);
+create table redeem_items (
+  id uuid primary key default gen_random_uuid(),
+  name text, points_cost int, stock int, icon text, cat text
+);
+create table redeem_history (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id), item_id uuid references redeem_items(id),
+  points_spent int, date date default current_date
+);
+create table announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text, content text, created_by uuid references users(id),
+  date date default current_date, pinned bool default false
+);
+alter table attendance enable row level security;
+alter table piket_log enable row level security;
+-- policies: staff read own rows, admin full access`;

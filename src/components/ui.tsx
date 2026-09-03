@@ -72,14 +72,14 @@ export function Chip({ children, tone = "mut", className = "" }: { children: Rea
   );
 }
 
-export function Avatar({ user, size = 38, ring }: { user: Pick<User, "name" | "hue" | "employeeId">; size?: number; ring?: boolean }) {
+export function Avatar({ user, size = 38, ring }: { user: Pick<User, "name" | "avatarHue">; size?: number; ring?: boolean }) {
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-display font-bold ${ring ? "ring-2 ring-amber/60 ring-offset-2 ring-offset-panel" : ""}`}
+      className={`ttl flex shrink-0 items-center justify-center rounded-full font-bold ${ring ? "ring-2 ring-amber/60 ring-offset-2 ring-offset-panel" : ""}`}
       style={{
-        width: size, height: size, fontSize: size * 0.38,
-        background: `linear-gradient(135deg, hsl(${user.hue} 65% 42%), hsl(${user.hue + 40} 60% 30%))`,
+        width: size, height: size, fontSize: size * 0.36, letterSpacing: "0.03em",
+        background: `linear-gradient(135deg, hsl(${user.avatarHue} 65% 42%), hsl(${user.avatarHue + 40} 60% 30%))`,
         color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.35)",
       }}
     >
@@ -100,14 +100,14 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
-export function Seg<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+export function Seg<T extends string>({ options, value, onChange, small, className }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void; small?: boolean; className?: string }) {
   return (
-    <div className="flex rounded-xl border border-line bg-panel2 p-1">
+    <div className={`flex rounded-xl border border-line bg-panel2 ${small ? "w-fit p-0.5" : "p-1"} ${className ?? ""}`}>
       {options.map((o) => (
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
-          className={`tap ttl flex-1 rounded-lg px-2 py-1.5 text-[12.5px] font-bold ${value === o.id ? "bg-amber text-[#191203]" : "text-mut hover:text-ink"}`}
+          className={`tap ttl ${small ? "" : "flex-1"} rounded-lg ${small ? "px-2.5 py-1 text-[11px]" : "px-2 py-1.5 text-[12.5px]"} font-bold ${value === o.id ? "bg-amber text-[#191203]" : "text-mut hover:text-ink"}`}
         >
           {o.label}
         </button>

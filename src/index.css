@@ -1,4 +1,31 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* ---------- leaflet schematic map (tile-free, offline-safe) ---------- */
+.leaflet-container {
+  background:
+    linear-gradient(var(--line2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line2) 1px, transparent 1px),
+    var(--panel2);
+  background-size: 26px 26px, 26px 26px, auto;
+  font-family: var(--font-b);
+}
+.mk-user {
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--ok); border: 3px solid #fff;
+  box-shadow: 0 0 0 3px rgba(62, 213, 152, 0.25), 0 0 14px rgba(62, 213, 152, 0.55);
+  animation: mkPulse 1.8s ease-in-out infinite;
+}
+.mk-user.bad { background: var(--bad); box-shadow: 0 0 0 3px rgba(255, 92, 92, 0.25), 0 0 14px rgba(255, 92, 92, 0.55); }
+.mk-label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink); background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line); border-radius: 5px; padding: 2px 5px; white-space: nowrap;
+}
+@keyframes mkPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
 
 /* ---------- runtime theme variables ---------- */
 :root,

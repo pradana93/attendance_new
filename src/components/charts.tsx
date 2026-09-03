@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
-import type { DayStatus } from "../lib/store";
+
+export type DayStatus = "present" | "late" | "early" | "absent" | "off" | "future";
 
 /* ---------------- ring gauge ---------------- */
 export function Ring({ value, size = 132, label, sub }: { value: number; size?: number; label: string; sub?: string }) {

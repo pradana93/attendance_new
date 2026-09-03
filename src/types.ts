@@ -1,33 +1,22 @@
-/** Domain types — mirrors the SQL schema (users, attendance, schedules, overtime, …). */
-
 export type Role = "superadmin" | "admin" | "staff";
-export type ShiftTone = "morning" | "afternoon" | "night";
-export type PunchMethod = "face" | "qr" | "manual";
-
-export interface Shift {
-  id: string;
-  name: string;
-  window: string; // "06:00 – 14:00"
-  start: string;
-  end: string;
-  points: number;
-  tone: ShiftTone;
-}
+export type Lang = "en" | "id";
+export type Tone = "morning" | "afternoon" | "night";
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password: string; // demo only — in production: Supabase Auth + bcrypt
+  password: string; // demo only — in production Supabase Auth handles credentials
   role: Role;
   employeeId: string;
   department: string;
-  hue: number; // generated avatar color
+  avatarHue: number;
+  photo?: string;
   faceEnrolled: boolean;
-  faceHash: string; // stand-in for encrypted 128-d face descriptor
-  active: boolean;
-  joinedAt: string;
   points: number;
+  active: boolean;
+  createdAt: string;
+  notifApproval: boolean;
 }
 
 export interface Attendance {
@@ -36,55 +25,71 @@ export interface Attendance {
   date: string; // YYYY-MM-DD
   checkIn?: string; // ISO
   checkOut?: string;
-  inScore?: number; // face match %
-  outScore?: number;
-  distance: number; // meters from gate beacon
-  method: PunchMethod;
-  selfReport?: boolean;
-  reviewed?: boolean;
   late: boolean;
-  earlyOut: boolean;
+  early: boolean;
+  inScore?: number;
+  outScore?: number;
+  distance?: number;
+  method?: "face" | "qr" | "manual";
+  selfReport?: boolean;
 }
 
-export interface ScheduleEntry {
+export interface PiketTask {
+  id: string;
+  name: string;
+  area: string; // Depan / Tengah / Belakang / Gudang / Umum
+  points: number;
+  requiresProof: boolean;
+  active: boolean;
+  icon: "broom" | "mop" | "door" | "thermo" | "box" | "clip";
+  desc: string;
+}
+
+export interface PiketAssignment {
+  id: string;
+  taskId: string;
+  day: number; // 1 = Monday … 6 = Saturday
+  userId: string;
+}
+
+export interface PiketLog {
+  id: string;
+  date: string;
+  taskId: string;
+  userId: string;
+  doneAt: string;
+  proof: boolean;
+  points: number;
+}
+
+export interface Overtime {
   id: string;
   userId: string;
   date: string;
-  shiftId: string;
-  done: boolean;
-  proof: boolean; // duty completion photo uploaded
+  start: string;
+  end: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  note?: string;
+  createdAt: string;
+  decidedAt?: string;
+}
+
+export interface Leave {
+  id: string;
+  userId: string;
+  date: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
 }
 
 export interface PointEvent {
   id: string;
   userId: string;
+  date: string;
   delta: number;
-  date: string;
   label: string;
-}
-
-export interface OTReq {
-  id: string;
-  userId: string;
-  date: string;
-  start: string; // "17:00"
-  end: string;
-  reason: string;
-  photo: boolean;
-  status: "pending" | "approved" | "rejected";
-  note?: string;
-  by?: string;
-  createdAt: string;
-}
-
-export interface LeaveReq {
-  id: string;
-  userId: string;
-  from: string;
-  to: string;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
 }
 
 export interface RedeemItem {
@@ -92,16 +97,16 @@ export interface RedeemItem {
   name: string;
   cost: number;
   stock: number;
-  cat: "Essentials" | "Voucher" | "Gear";
-  icon: string;
+  icon: "package" | "wallet" | "shield" | "cup" | "ticket" | "snack";
+  cat: "Gear" | "Voucher" | "Essentials";
 }
 
 export interface Redemption {
   id: string;
   userId: string;
   itemId: string;
-  cost: number;
   date: string;
+  cost: number;
 }
 
 export interface Announcement {
@@ -113,41 +118,53 @@ export interface Announcement {
   pinned: boolean;
 }
 
-export interface Noti {
+export interface Notif {
   id: string;
-  to: string; // userId or "all"
-  text: string;
-  date: string;
+  userId: string; // "*" = broadcast
+  title: string;
+  body: string;
+  date: string; // ISO
   readBy: string[];
-  kind: "ok" | "warn" | "info";
+}
+
+export interface SupaCfg {
+  url: string;
+  key: string;
+  status: "off" | "connected";
+  connectedAt?: string;
+  lastSync?: string;
 }
 
 export interface Settings {
   appName: string;
   company: string;
-  logo?: string; // dataURL
+  logo?: string;
   hue: number;
   siteName: string;
   lat: number;
   lng: number;
-  radius: number; // geofence meters
-  lateTime: string; // "08:00"
+  radius: number;
+  lateTime: string; // HH:mm
+  theme: "light" | "dark";
   pointsExpiryMonths: number;
-  theme: "dark" | "light";
+  otRate: number; // IDR per hour
+  language: Lang;
+  supabase: SupaCfg;
 }
 
 export interface DB {
-  v: number;
-  users: User[];
-  shifts: Shift[];
-  attendance: Attendance[];
-  schedules: ScheduleEntry[];
-  pointEvents: PointEvent[];
-  ot: OTReq[];
-  leaves: LeaveReq[];
-  items: RedeemItem[];
-  redemptions: Redemption[];
-  announcements: Announcement[];
-  notis: Noti[];
+  version: number;
   settings: Settings;
+  users: User[];
+  attendance: Attendance[];
+  tasks: PiketTask[];
+  template: PiketAssignment[];
+  piketLog: PiketLog[];
+  ot: Overtime[];
+  pointEvents: PointEvent[];
+  redemptions: Redemption[];
+  items: RedeemItem[];
+  announcements: Announcement[];
+  notifications: Notif[];
+  leaves: Leave[];
 }
