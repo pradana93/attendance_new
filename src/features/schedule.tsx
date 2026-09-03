@@ -9,9 +9,10 @@ import {
   addItem, completePiket, deleteTask, getDB, grantBonus, piketForDate, redeem,
   rotateTemplate, saveTask, setAssignment,
 } from "../lib/store";
-import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, wait } from "../lib/util";
+import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
+import { CaptureSheet, Lightbox } from "../components/capture";
 
 const AREAS = ["Depan", "Tengah", "Belakang", "Gudang", "Umum"];
 const DAY_LABELS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -63,7 +64,7 @@ function Roster({ user }: { user: User }) {
   const [assignFor, setAssignFor] = useState<{ taskId: string; taskName: string } | null>(null);
   const [delTask, setDelTask] = useState<PiketTask | null>(null);
   const [proofFor, setProofFor] = useState<{ task: PiketTask; date: string; userId: string } | null>(null);
-  const [capturing, setCapturing] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState<{ src: string; caption: string } | null>(null);
   const monday = useMemo(() => mondayOf(new Date()), []);
   if (!db) return null;
   const dayLabels = db.settings.language === "id" ? DAY_LABELS_ID : DAY_LABELS_EN;
@@ -83,14 +84,8 @@ function Roster({ user }: { user: User }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, db?.piketLog.length, db?.template.length]);
 
-  const doComplete = async (task: PiketTask, date: string, userId: string, withProof: boolean) => {
-    if (withProof) {
-      setCapturing(true);
-      await wait(850);
-      setCapturing(false);
-      setProofFor(null);
-    }
-    const res = completePiket(date, task.id, userId, withProof);
+  const doComplete = (task: PiketTask, date: string, userId: string, photo?: string) => {
+    const res = completePiket(date, task.id, userId, photo);
     if (res.ok) {
       toast(`${task.name} · ${res.msg}`, "ok");
       confetti({ particleCount: 40, spread: 58, origin: { y: 0.7 }, colors: ["#ffb224", "#3ed598"], disableForReducedMotion: true });
@@ -141,11 +136,20 @@ function Roster({ user }: { user: User }) {
                           <p className="truncate text-[12.5px] font-semibold text-ink">{task.name}</p>
                           <p className="font-mono text-[10px] text-faint">+{task.points} {t("c.pts")}{task.requiresProof ? " · 📷" : ""}</p>
                         </div>
-                        {log ? <Chip tone="ok"><Check size={10} /></Chip>
-                          : k <= todayKey() ? (
-                            <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: user.id }) : doComplete(task, k, user.id, false)}
-                              className="tap rounded-lg border border-amber/45 bg-amber/10 px-2.5 py-1 font-mono text-[10.5px] uppercase text-amber hover:bg-amber/20">{t("p.complete")}</button>
-                          ) : <span className="font-mono text-[10px] uppercase text-faint">—</span>}
+                        {log ? (
+                          <span className="flex items-center gap-1.5">
+                            {log.proof && (
+                              <button onClick={() => setViewPhoto({ src: log.proof!, caption: `${task.name} · ${fmtDate(k)}` })}
+                                className="tap overflow-hidden rounded-md border border-line" aria-label={t("p.proofTaken")}>
+                                <img src={log.proof} alt="" className="h-7 w-9 object-cover" />
+                              </button>
+                            )}
+                            <Chip tone="ok"><Check size={10} /></Chip>
+                          </span>
+                        ) : k <= todayKey() ? (
+                          <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: user.id }) : doComplete(task, k, user.id)}
+                            className="tap rounded-lg border border-amber/45 bg-amber/10 px-2.5 py-1 font-mono text-[10.5px] uppercase text-amber hover:bg-amber/20">{t("p.complete")}</button>
+                        ) : <span className="font-mono text-[10px] uppercase text-faint">—</span>}
                       </div>
                     ))}
                   </div>
@@ -176,11 +180,20 @@ function Roster({ user }: { user: User }) {
                     </div>
                     <p className="mt-0.5 font-mono text-[10.5px] text-faint">{u?.name ?? t("p.unassigned")} · {task.area} · +{task.points} {t("c.pts")}</p>
                   </div>
-                  {log ? <Chip tone="ok"><Check size={10} /> {t("c.done").toLowerCase()}</Chip>
-                    : u && k <= todayKey() ? (
-                      <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: u.id }) : doComplete(task, k, u.id, false)}
-                        className="tap rounded-lg border border-ok/35 bg-ok/10 px-2.5 py-1.5 font-mono text-[10.5px] uppercase text-ok hover:bg-ok/20">{t("p.complete")}</button>
-                    ) : <Chip tone="mut">—</Chip>}
+                  {log ? (
+                    <span className="flex items-center gap-1.5">
+                      {log.proof && (
+                        <button onClick={() => setViewPhoto({ src: log.proof!, caption: `${task.name} · ${u?.name} · ${fmtDate(k)}` })}
+                          className="tap overflow-hidden rounded-md border border-line" aria-label={t("p.proofTaken")}>
+                          <img src={log.proof} alt="" className="h-7 w-9 object-cover" />
+                        </button>
+                      )}
+                      <Chip tone="ok"><Check size={10} /> {t("c.done").toLowerCase()}</Chip>
+                    </span>
+                  ) : u && k <= todayKey() ? (
+                    <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: u.id }) : doComplete(task, k, u.id)}
+                      className="tap rounded-lg border border-ok/35 bg-ok/10 px-2.5 py-1.5 font-mono text-[10.5px] uppercase text-ok hover:bg-ok/20">{t("p.complete")}</button>
+                  ) : <Chip tone="mut">—</Chip>}
                 </div>
               );
             })}
@@ -251,23 +264,15 @@ function Roster({ user }: { user: User }) {
         body="The task and all its weekly assignments will be removed. History is kept."
         yesLabel={t("c.delete")} onYes={() => { if (delTask) { deleteTask(delTask.id); toast(`${delTask.name} removed`, "info"); } }} />
 
-      {/* proof capture */}
-      <Sheet open={!!proofFor} onClose={() => !capturing && setProofFor(null)} title={proofFor?.task.name ?? ""}>
-        {proofFor && (
-          <div className="space-y-3.5">
-            <div className="relative mx-auto flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl border border-line bg-[#0b0e12]">
-              <Camera size={30} className={capturing ? "animate-pulse text-amber" : "text-faint"} />
-              <p className="absolute bottom-2 font-mono text-[10.5px] uppercase tracking-widest text-white/70">
-                {capturing ? "capturing…" : `${proofFor.task.area} · ${fmtDate(proofFor.date)}`}
-              </p>
-            </div>
-            <p className="text-center text-[12px] text-mut">{proofFor.task.desc}</p>
-            <Btn className="w-full" busy={capturing} onClick={() => doComplete(proofFor.task, proofFor.date, proofFor.userId, true)}>
-              <Camera size={15} /> {t("p.takeProof")}
-            </Btn>
-          </div>
-        )}
-      </Sheet>
+      {/* real camera proof capture */}
+      <CaptureSheet
+        open={!!proofFor}
+        onClose={() => setProofFor(null)}
+        required={proofFor?.task.requiresProof}
+        title={proofFor ? `${proofFor.task.name} — ${t("p.takeProof")}` : ""}
+        onSave={(photo) => proofFor && doComplete(proofFor.task, proofFor.date, proofFor.userId, photo)}
+      />
+      <Lightbox src={viewPhoto?.src ?? null} onClose={() => setViewPhoto(null)} caption={viewPhoto?.caption} />
     </div>
   );
 }

@@ -58,7 +58,8 @@ export interface PiketLog {
   taskId: string;
   userId: string;
   doneAt: string;
-  proof: boolean;
+  /** submitted proof photo (data URL) — viewable by admin in the gallery */
+  proof?: string;
   points: number;
 }
 
@@ -71,6 +72,8 @@ export interface Overtime {
   reason: string;
   status: "pending" | "approved" | "rejected";
   note?: string;
+  /** optional supporting photo (data URL) — viewable by admin */
+  photo?: string;
   createdAt: string;
   decidedAt?: string;
 }

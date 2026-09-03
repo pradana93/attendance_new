@@ -9,6 +9,7 @@ import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../typ
 import { completePiket, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord } from "../lib/store";
 import { fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { CaptureSheet } from "../components/capture";
 import { Btn, Chip, LiveDot, SectionTitle, Sheet, toast } from "../components/ui";
 import { Spark } from "../components/charts";
 
@@ -24,7 +25,6 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
   const [ann, setAnn] = useState<Announcement | null>(null);
   const [geo, setGeo] = useState<{ dist: number; simulated: boolean } | null>(null);
   const [proofTask, setProofTask] = useState<{ task: PiketTask; date: string } | null>(null);
-  const [capturing, setCapturing] = useState(false);
   const rec = todayRecord(user.id);
   const stats = useMemo(() => statsFor(user.id), [user.id, now.getMinutes()]); // eslint-disable-line react-hooks/exhaustive-deps
   const kind: Kind = rec?.checkIn && rec?.checkOut ? "done" : rec?.checkIn ? "out" : "in";
@@ -57,14 +57,8 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
     return () => { stop = true; };
   }, [db?.settings.lat, db?.settings.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const finishTask = async (task: PiketTask, withProof: boolean) => {
-    if (withProof) {
-      setCapturing(true);
-      await wait(900);
-      setCapturing(false);
-      setProofTask(null);
-    }
-    const res = completePiket(todayKey(), task.id, user.id, withProof);
+  const finishTask = (task: PiketTask, photo?: string) => {
+    const res = completePiket(todayKey(), task.id, user.id, photo);
     if (res.ok) {
       toast(`${task.name} · ${res.msg}`, "ok");
       confetti({ particleCount: 46, spread: 62, origin: { y: 0.72 }, colors: ["#ffb224", "#3ed598"], disableForReducedMotion: true });
@@ -196,8 +190,12 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
                     <p className="truncate text-[13px] font-semibold text-ink">{task.name}</p>
                     <p className="font-mono text-[10.5px] text-faint">{task.area} · +{task.points} {t("c.pts")}{task.requiresProof ? ` · ${t("p.photoProof").toLowerCase()}` : ""}</p>
                   </div>
-                  {log ? <Chip tone="ok"><Check size={10} /> {fmtTime(log.doneAt)}</Chip>
-                    : <Btn className="!px-3 !py-1.5 text-[12px]" onClick={() => task.requiresProof ? setProofTask({ task, date: todayKey() }) : finishTask(task, false)}>{t("p.complete")}</Btn>}
+                  {log ? (
+                    <span className="flex items-center gap-1.5">
+                      {log.proof && <img src={log.proof} alt="" className="h-7 w-9 rounded-md border border-line object-cover" />}
+                      <Chip tone="ok"><Check size={10} /> {fmtTime(log.doneAt)}</Chip>
+                    </span>
+                  ) : <Btn className="!px-3 !py-1.5 text-[12px]" onClick={() => task.requiresProof ? setProofTask({ task, date: todayKey() }) : finishTask(task)}>{t("p.complete")}</Btn>}
                 </div>
               ))}
             </div>
@@ -292,24 +290,14 @@ export default function Dashboard({ user, goTab }: { user: User; goTab: (t: stri
         )}
       </Sheet>
 
-      {/* piket proof capture */}
-      <Sheet open={!!proofTask} onClose={() => !capturing && setProofTask(null)} title={proofTask?.task.name ?? ""}>
-        {proofTask && (
-          <div className="space-y-3.5">
-            <div className="relative mx-auto flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl border border-line bg-[#0b0e12]">
-              <Camera size={30} className={capturing ? "animate-pulse text-amber" : "text-faint"} />
-              <p className="absolute bottom-2 font-mono text-[10.5px] uppercase tracking-widest text-white/70">
-                {capturing ? "capturing…" : `${proofTask.task.area} · ${db?.settings.siteName}`}
-              </p>
-              {capturing && <div className="absolute inset-0 bg-white/10" style={{ animation: "fadein .3s ease" }} />}
-            </div>
-            <p className="text-center text-[12px] text-mut">{proofTask.task.desc}</p>
-            <Btn className="w-full" busy={capturing} onClick={() => finishTask(proofTask.task, true)}>
-              <Camera size={15} /> {t("p.takeProof")}
-            </Btn>
-          </div>
-        )}
-      </Sheet>
+      {/* real camera proof capture */}
+      <CaptureSheet
+        open={!!proofTask}
+        onClose={() => setProofTask(null)}
+        required={proofTask?.task.requiresProof}
+        title={proofTask ? `${proofTask.task.name} — ${t("p.takeProof")}` : ""}
+        onSave={(photo) => proofTask && finishTask(proofTask.task, photo)}
+      />
     </div>
   );
 }

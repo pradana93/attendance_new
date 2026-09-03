@@ -14,7 +14,7 @@ import { fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 
-export type AdminSec = "live" | "staff" | "notice" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "photos" | "cloud" | "config";
 type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
@@ -33,15 +33,17 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         <Chip tone={user.role === "superadmin" ? "amber" : "cool"}>{user.role}</Chip>
       </div>
       <Seg
+        className="no-scrollbar overflow-x-auto [&>button]:shrink-0"
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
-          { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          { id: "photos", label: t("a.photos") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
         ]}
         value={sec} onChange={setSec}
       />
       {sec === "live" && <LiveBoard />}
       {sec === "staff" && <StaffPanel admin={user} />}
       {sec === "notice" && <NoticePanel admin={user} />}
+      {sec === "photos" && <PhotosPanel />}
       {sec === "cloud" && <CloudPanel />}
       {sec === "config" && <ConfigPanel />}
     </div>
@@ -180,6 +182,7 @@ function StaffPanel({ admin }: { admin: User }) {
   const [role, setRole] = useState<Role>("staff");
   const [pw, setPw] = useState(genPw());
   const [saving, setSaving] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
   if (!db) return null;
   const isSuper = admin.role === "superadmin";
   const nextId = "WMS-0" + (10 + db.users.length + 1);
@@ -220,6 +223,9 @@ function StaffPanel({ admin }: { admin: User }) {
                   <button onClick={() => { enrollFace(u.id); toast(`Face enrolled: ${u.name}`); }}
                     className="tap rounded-lg border border-amber/40 bg-amber/10 px-2 py-1.5 font-mono text-[10px] uppercase text-amber">{t("a.enroll")}</button>
                 )}
+              <button onClick={() => setEditUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-amber/50 hover:text-amber" aria-label={t("a.editUser")}>
+                <Pencil size={13} />
+              </button>
               {u.id !== admin.id && u.role !== "superadmin" && <Toggle on={u.active} onChange={() => { toggleActive(u.id); toast(`${u.name} ${u.active ? "deactivated" : "reactivated"}`, "info"); }} />}
             </div>
           </div>
