@@ -17,6 +17,25 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.0.0", date: new Date().toISOString().slice(0, 10), name: "Industrial Overhaul",
+    items: [
+      { tag: "new", text: "Zero-dependency architecture — removed Leaflet, implemented pure SVG/CSS custom Radar View for geofence visualization." },
+      { tag: "new", text: "Offline-first design — works without internet, loads instantly, no API key dependencies." },
+      { tag: "new", text: "Dark mode tactical interface — high-contrast amber/green indicators, monospaced fonts for warehouse readability." },
+      { tag: "new", text: "Bottom tab navigation with active state glow and top 'Live Status' pulse indicator." },
+      { tag: "new", text: "Radar visualization — high-tech warehouse scanner interface replacing external maps." },
+      { tag: "new", text: "Status badges with real-time feedback and explicit sync indicators (Green=Synced, Amber=Local)." },
+      { tag: "new", text: "Floating Action Button for auto-capture screenshot + console logs for issue reporting." },
+      { tag: "new", text: "Geofence Studio — drag-and-drop SVG circle for visual check-in radius configuration." },
+      { tag: "new", text: "Smart Roster — visual shift cards with countdown timers (Harian/Tengah/Belakang)." },
+      { tag: "new", text: "Gamified attendance — points system and streak badges for on-time check-ins." },
+      { tag: "new", text: "Offline sync control — manual 'Sync Now' with visual status feedback." },
+      { tag: "improved", text: "Cleaned package dependencies, removed all mapping libraries." },
+      { tag: "improved", text: "Rewrote core components (Sheet, Button, Card) with robust error handling." },
+      { tag: "improved", text: "Enhanced store logic with strict typing to prevent crashes." },
+    ],
+  },
+  {
     version: "1.10.0", date: "2026-03-28", name: "Push notifications",
     items: [
       { tag: "new", text: "Push notification reminders for Android Chrome PWA — schedule daily clock-in, clock-out and piket duty alerts." },
@@ -28,12 +47,12 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: "1.10.0", date: new Date().toISOString().slice(0, 10), name: "Geofence Studio",
+    version: "1.10.0", date: "2026-03-28", name: "Geofence Studio",
     items: [
       { tag: "new", text: "Interactive Geofence Editor — drag the center pin to reposition GPS coordinates and pull the radius handle to adjust check-in zone visually." },
       { tag: "new", text: "SVG radar visualization with animated sweep, grid overlay and live coordinate/metric display." },
       { tag: "improved", text: "Admin Config panel now features one-click access to geofence editing with real-time preview of lat/lng/radius values." },
-      { tag: "tech", text: "Zero-dependency solution using native SVG and pointer events — no Leaflet or map tile dependencies required." },
+      { tag: "improved", text: "Zero-dependency solution using native SVG and pointer events — no Leaflet or map tile dependencies required." },
     ],
   },
   {
