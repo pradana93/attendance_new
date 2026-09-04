@@ -17,6 +17,16 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.2.0", date: new Date().toISOString().slice(0, 10), name: "Supabase Cloud Sync v2",
+    items: [
+      { tag: "new", text: "Real Supabase cloud sync integration — no mocks, direct database connection with @supabase/supabase-js." },
+      { tag: "new", text: "Cloud schema deployment wizard with full RLS policies for multi-tenant security." },
+      { tag: "new", text: "Hybrid sync mode — local-first with manual cloud sync and visual status indicators." },
+      { tag: "improved", text: "Connection test utility validates Supabase credentials before sync operations." },
+      { tag: "improved", text: "Settings table auto-created for geofence, config and workspace metadata storage." },
+    ],
+  },
+  {
     version: "2.0.0", date: new Date().toISOString().slice(0, 10), name: "Industrial Overhaul",
     items: [
       { tag: "new", text: "Zero-dependency architecture — removed Leaflet, implemented pure SVG/CSS custom Radar View for geofence visualization." },
