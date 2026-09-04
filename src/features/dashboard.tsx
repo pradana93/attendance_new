@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
 import confetti from "canvas-confetti";
 import {
   AlertTriangle, ArrowLeftRight, Bell as BellIcon, Camera, Check, ChevronRight, Clock3,
@@ -384,52 +383,95 @@ function TaskIcon({ icon }: { icon: PiketTask["icon"] }) {
   );
 }
 
-/* =============== leaflet geofence map =============== */
+/* =============== SVG geofence map (zero deps) =============== */
 export function GeofenceMap({ lat, lng, radius, pos, inside }: {
   lat: number; lng: number; radius: number;
   pos: { lat: number; lng: number } | null; inside: boolean | null;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const userMk = useRef<L.Marker | null>(null);
+  // Convert lat/lng deltas to SVG coordinates (simple equirectangular projection for small area)
+  const toSvg = (pLat: number, pLng: number) => {
+    const dLat = pLat - lat;
+    const dLng = pLng - lng;
+    const x = 150 + dLng * 6000; // scale factor for longitude
+    const y = 150 - dLat * 6000; // scale factor for latitude (inverted Y)
+    return { x, y };
+  };
 
-  useEffect(() => {
-    if (!ref.current || mapRef.current) return;
-    const map = L.map(ref.current, {
-      zoomControl: false, attributionControl: false, dragging: false,
-      scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false,
-    });
-    map.setView([lat, lng], 17);
-    // geofence circle
-    L.circle([lat, lng], {
-      radius, color: "#ffb224", weight: 2, dashArray: "6 6", fillColor: "#ffb224", fillOpacity: 0.1,
-    }).addTo(map);
-    // warehouse footprint
-    const dLat = radius / 111000 * 0.7, dLng = radius / (111000 * Math.cos((lat * Math.PI) / 180)) * 0.9;
-    L.rectangle([[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]], {
-      color: "#5ac8e8", weight: 1.5, fillColor: "#5ac8e8", fillOpacity: 0.07, dashArray: "3 5",
-    }).addTo(map);
-    // beacon
-    L.circleMarker([lat, lng], { radius: 5, color: "#ffb224", weight: 2, fillColor: "#ffb224", fillOpacity: 1 }).addTo(map);
-    L.marker([lat, lng], {
-      icon: L.divIcon({ className: "", html: '<div class="mk-label" style="transform:translate(-50%,-190%)">beacon</div>', iconSize: [0, 0] }),
-      interactive: false,
-    }).addTo(map);
-    mapRef.current = map;
-    const t = setTimeout(() => map.invalidateSize(), 280);
-    return () => { clearTimeout(t); map.remove(); mapRef.current = null; userMk.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const center = toSvg(lat, lng);
+  const userPos = pos ? toSvg(pos.lat, pos.lng) : null;
+  
+  // Calculate radius in SVG units (approximate: 1 degree ≈ 111km)
+  const svgRadius = (radius / 111000) * 6000;
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !pos) return;
-    const icon = L.divIcon({ className: "", html: `<div class="mk-user ${inside === false ? "bad" : ""}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
-    if (!userMk.current) userMk.current = L.marker([pos.lat, pos.lng], { icon }).addTo(map);
-    else { userMk.current.setLatLng([pos.lat, pos.lng]); userMk.current.setIcon(icon); }
-  }, [pos, inside]);
-
-  return <div ref={ref} className="h-full w-full" />;
+  return (
+    <svg viewBox="0 0 300 300" className="h-full w-full bg-[#0f1318]">
+      {/* Grid lines */}
+      <defs>
+        <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+          <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1f2937" strokeWidth="0.5" />
+        </pattern>
+      </defs>
+      <rect width="300" height="300" fill="url(#grid)" />
+      
+      {/* Geofence circle */}
+      <circle
+        cx={center.x}
+        cy={center.y}
+        r={svgRadius}
+        fill="rgba(255, 178, 36, 0.08)"
+        stroke="#ffb224"
+        strokeWidth="2"
+        strokeDasharray="6 6"
+      />
+      
+      {/* Warehouse footprint (approximate rectangle) */}
+      <rect
+        x={center.x - svgRadius * 0.7}
+        y={center.y - svgRadius * 0.5}
+        width={svgRadius * 1.4}
+        height={svgRadius}
+        fill="rgba(90, 200, 232, 0.07)"
+        stroke="#5ac8e8"
+        strokeWidth="1.5"
+        strokeDasharray="3 5"
+      />
+      
+      {/* Beacon center */}
+      <circle cx={center.x} cy={center.y} r="5" fill="#ffb224" />
+      <text x={center.x} y={center.y - 12} textAnchor="middle" fontSize="10" fill="#ffb224" className="font-mono">beacon</text>
+      
+      {/* User position marker */}
+      {userPos && (
+        <g>
+          <circle
+            cx={userPos.x}
+            cy={userPos.y}
+            r="8"
+            fill={inside === false ? "#ff5c5c" : "#3ed598"}
+            className="animate-pulse"
+          />
+          <circle cx={userPos.x} cy={userPos.y} r="4" fill="#0f1318" />
+          <circle cx={userPos.x} cy={userPos.y} r="2" fill={inside === false ? "#ff5c5c" : "#3ed598"} />
+        </g>
+      )}
+      
+      {/* Radar sweep animation */}
+      <g className="origin-center" style={{ transformOrigin: `${center.x}px ${center.y}px` }}>
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4s" repeatCount="indefinite" />
+        <path
+          d={`M ${center.x} ${center.y} L ${center.x + svgRadius * 0.8} ${center.y} A ${svgRadius * 0.8} ${svgRadius * 0.8} 0 0 1 ${center.x + svgRadius * 0.5} ${center.y - svgRadius * 0.6} Z`}
+          fill="url(#radarGradient)"
+          opacity="0.3"
+        />
+      </g>
+      <defs>
+        <radialGradient id="radarGradient">
+          <stop offset="0%" stopColor="#ffb224" stopOpacity="0" />
+          <stop offset="100%" stopColor="#ffb224" stopOpacity="0.6" />
+        </radialGradient>
+      </defs>
+    </svg>
+  );
 }
 
 /* =============== check-in/out flow =============== */
