@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
-  Announcement, Attendance, DB, Handover, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
+  Announcement, Attendance, DB, Feedback, Handover, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
   PointEvent, Redemption, RedeemItem, Role, Settings, SwapRequest, User,
 } from "../types";
 import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
@@ -281,7 +281,7 @@ export function rerunSetup() {
   try { localStorage.removeItem(DB_KEY); sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
   cache = null;
   initStore();
-  const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [] };
+  const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [], feedback: [] };
   cache = fresh;
   persist();
   emit();
@@ -303,7 +303,7 @@ export function completeSetup(args: { appName: string; company: string; logo?: s
   cache = {
     ...seed(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
-    users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [],
+    users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [], feedback: [],
     announcements: [{ id: uid(), title: "Workspace ready", body: "Add staff accounts, then build the weekly piket template in the Piket tab.", author: args.adminName, date: todayKey(), pinned: true }],
   };
   persist(); emit();
@@ -647,6 +647,63 @@ export function addAnnouncement(input: { title: string; body: string; author: st
 export function deleteAnnouncement(id: string) {
   if (!cache) return;
   cache.announcements = cache.announcements.filter((a) => a.id !== id);
+  mutate();
+}
+
+/* ================= feedback ================= */
+export function submitFeedback(input: {
+  userId: string;
+  type: Feedback["type"];
+  priority: Feedback["priority"];
+  title: string;
+  description: string;
+  screenshot?: string;
+  contactEmail?: string;
+  route?: string;
+}): { ok: boolean; msg: string } {
+  if (!cache) return { ok: false, msg: "Store not ready" };
+  if (!input.title.trim()) return { ok: false, msg: "Title is required." };
+  if (!input.description.trim()) return { ok: false, msg: "Description is required." };
+  
+  const fb: Feedback = {
+    id: uid(),
+    userId: input.userId,
+    type: input.type,
+    priority: input.priority,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    screenshot: input.screenshot,
+    contactEmail: input.contactEmail,
+    status: "new",
+    createdAt: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    appVersion: APP_VERSION,
+    route: input.route,
+  };
+  
+  cache.feedback.unshift(fb);
+  pushNotif("*", "New feedback submitted", `${input.type.charAt(0).toUpperCase() + input.type.slice(1)}: ${fb.title}`);
+  mutate();
+  return { ok: true, msg: "Feedback submitted · Thank you!" };
+}
+
+export function updateFeedbackStatus(id: string, status: Feedback["status"], adminId: string, adminNote?: string) {
+  if (!cache) return;
+  const fb = cache.feedback.find((f) => f.id === id);
+  if (!fb) return;
+  fb.status = status;
+  fb.updatedAt = new Date().toISOString();
+  if (adminNote !== undefined) fb.adminNote = adminNote;
+  if (status === "planned" || status === "in_progress" || status === "shipped" || status === "wont_fix") {
+    fb.decidedAt = new Date().toISOString();
+    fb.decidedBy = adminId;
+  }
+  mutate();
+}
+
+export function deleteFeedback(id: string) {
+  if (!cache) return;
+  cache.feedback = cache.feedback.filter((f) => f.id !== id);
   mutate();
 }
 

@@ -190,6 +190,30 @@ export interface SwapOverride {
   userId: string;
 }
 
+export type FeedbackType = "bug" | "idea" | "general" | "praise";
+export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
+export type FeedbackStatus = "new" | "in_review" | "planned" | "in_progress" | "shipped" | "wont_fix";
+
+export interface Feedback {
+  id: string;
+  userId: string;
+  type: FeedbackType;
+  priority: FeedbackPriority;
+  title: string;
+  description: string;
+  screenshot?: string;
+  contactEmail?: string;
+  status: FeedbackStatus;
+  adminNote?: string;
+  createdAt: string;
+  updatedAt?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  userAgent?: string;
+  appVersion?: string;
+  route?: string;
+}
+
 export interface DB {
   version: number;
   settings: Settings;
@@ -208,4 +232,5 @@ export interface DB {
   handovers: Handover[];
   swapRequests: SwapRequest[];
   swapOverrides: SwapOverride[];
+  feedback: Feedback[];
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2,
+  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare,
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings } from "../lib/store";
@@ -9,7 +9,7 @@ import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
 import { Avatar, Btn, Chip, Confirm, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 
-export default function Me({ user, onChangelog }: { user: User; onChangelog: () => void }) {
+export default function Me({ user, onChangelog, onFeedback }: { user: User; onChangelog: () => void; onFeedback?: () => void }) {
   const db = getDB();
   const t = useT();
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -62,6 +62,18 @@ export default function Me({ user, onChangelog }: { user: User; onChangelog: () 
           ))}
         </div>
       )}
+
+      {/* feedback button for all users */}
+      <button onClick={onFeedback} className="tap card flex w-full items-center justify-between p-4 text-left hover:border-amber/40">
+        <div className="flex items-center gap-2.5">
+          <MessageSquare size={16} className="text-cool" />
+          <div>
+            <p className="text-[13px] font-semibold text-ink">{t("fb.title")}</p>
+            <p className="font-mono text-[10.5px] text-faint">bugs · ideas · general</p>
+          </div>
+        </div>
+        <Chip tone="cool">send</Chip>
+      </button>
 
       {/* settings */}
       <SectionTitle>{t("m.settings")}</SectionTitle>
