@@ -229,7 +229,7 @@ function seed(): DB {
   return {
     version: VERSION, settings: { ...defaultSettings }, users, attendance, tasks, template, piketLog, ot,
     pointEvents, redemptions, items, announcements, notifications, leaves,
-    handovers, swapRequests, swapOverrides: [],
+    handovers, swapRequests, swapOverrides: [], feedback: [],
   };
 }
 
@@ -246,7 +246,7 @@ function mulberry(a: number) {
 /** Permanent Super Admin credentials (fixed for this deployment) */
 export const SUPER_EMAIL = "majestap93@gmail.com";
 export const SUPER_PASSWORD = "super123";
-export const APP_VERSION = "1.8.0";
+export const APP_VERSION = "1.9.0";
 
 /** Gmail SMTP relay used for password-reset delivery */
 export const SMTP_RELAY = { host: "smtp.gmail.com", port: 587, security: "STARTTLS", from: "ShiftGate <no-reply@shiftgate.app>" };

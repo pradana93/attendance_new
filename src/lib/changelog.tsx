@@ -17,6 +17,15 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "1.9.0", date: "2026-03-25", name: "Feedback loop",
+    items: [
+      { tag: "new", text: "User feedback system — staff and admins can submit bugs, ideas, praise and general feedback with optional screenshot capture." },
+      { tag: "new", text: "Admin Feedback Inbox — filter by type, sort by priority or date, track status from New → In Review → Planned → In Progress → Shipped/Won't Fix." },
+      { tag: "new", text: "Feedback detail view with admin notes, status workflow and metadata (route, app version, device info)." },
+      { tag: "improved", text: "Capture module now exports takePhoto() for programmatic camera access in sheets and forms." },
+    ],
+  },
+  {
     version: "1.7.0", date: "2026-03-18", name: "Surface upgrade",
     items: [
       { tag: "improved", text: "Ambient layered background: film grain plus a slow radar-beacon sweep behind every screen." },

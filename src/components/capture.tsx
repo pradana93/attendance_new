@@ -23,6 +23,31 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+/** Programmatic photo capture: opens camera and returns data URL */
+export function takePhoto(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) {
+        reject(new Error("no file"));
+        return;
+      }
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        resolve(dataUrl);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    input.onerror = () => reject(new Error("cancelled"));
+    input.click();
+  });
+}
+
 /** Camera-proof capture sheet: take/choose photo → preview → save */
 export function CaptureSheet({ open, onClose, onSave, title, required }: {
   open: boolean; onClose: () => void; onSave: (dataUrl: string) => void; title: string; required?: boolean;

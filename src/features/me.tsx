@@ -7,7 +7,8 @@ import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
-import { Avatar, Btn, Chip, Confirm, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
+import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, StatusBadge, Toggle, toast } from "../components/ui";
+import { FeedbackSheet } from "./feedback";
 
 export default function Me({ user, onChangelog, onFeedback }: { user: User; onChangelog: () => void; onFeedback?: () => void }) {
   const db = getDB();
@@ -17,6 +18,7 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   if (!db) return null;
   const s = db.settings;
   const balance = leaveBalance(user.id);
@@ -64,7 +66,7 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
       )}
 
       {/* feedback button for all users */}
-      <button onClick={onFeedback} className="tap card flex w-full items-center justify-between p-4 text-left hover:border-amber/40">
+      <button onClick={() => setFeedbackOpen(true)} className="tap card flex w-full items-center justify-between p-4 text-left hover:border-amber/40">
         <div className="flex items-center gap-2.5">
           <MessageSquare size={16} className="text-cool" />
           <div>
@@ -74,6 +76,9 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
         </div>
         <Chip tone="cool">send</Chip>
       </button>
+
+      {/* feedback sheet */}
+      <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} />
 
       {/* settings */}
       <SectionTitle>{t("m.settings")}</SectionTitle>
