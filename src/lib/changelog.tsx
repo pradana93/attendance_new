@@ -28,6 +28,15 @@ export const RELEASES: Release[] = [
     ],
   },
   {
+    version: "1.10.0", date: new Date().toISOString().slice(0, 10), name: "Geofence Studio",
+    items: [
+      { tag: "new", text: "Interactive Geofence Editor — drag the center pin to reposition GPS coordinates and pull the radius handle to adjust check-in zone visually." },
+      { tag: "new", text: "SVG radar visualization with animated sweep, grid overlay and live coordinate/metric display." },
+      { tag: "improved", text: "Admin Config panel now features one-click access to geofence editing with real-time preview of lat/lng/radius values." },
+      { tag: "tech", text: "Zero-dependency solution using native SVG and pointer events — no Leaflet or map tile dependencies required." },
+    ],
+  },
+  {
     version: "1.9.0", date: "2026-03-25", name: "Feedback loop",
     items: [
       { tag: "new", text: "User feedback system — staff and admins can submit bugs, ideas, praise and general feedback with optional screenshot capture." },

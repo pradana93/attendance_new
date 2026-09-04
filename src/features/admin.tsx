@@ -16,6 +16,7 @@ import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
+import { GeofenceStudio } from "./geofence";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -720,12 +721,20 @@ function ConfigPanel() {
   const t = useT();
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmSetup, setConfirmSetup] = useState(false);
+  const [geofenceOpen, setGeofenceOpen] = useState(false);
   if (!db) return null;
   const s = db.settings;
   return (
     <div className="a-fadein space-y-3">
       <SectionTitle><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-amber" /> {t("a.geo")}</span></SectionTitle>
       <div className="card space-y-4 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-ink">{t("a.geofenceEditor")}</p>
+            <p className="font-mono text-[10.5px] text-faint">{s.lat.toFixed(6)}, {s.lng.toFixed(6)} · R: {s.radius}m</p>
+          </div>
+          <Btn variant="primary" onClick={() => setGeofenceOpen(true)}><MapPin size={14} /> {t("a.editGeo")}</Btn>
+        </div>
         <Field label={`${t("a.radius")} — ${s.radius} m`}>
           <input type="range" min={50} max={500} step={10} value={s.radius} onChange={(e) => updateSettings({ radius: Number(e.target.value) })} className="w-full accent-[var(--amber)]" />
         </Field>
@@ -794,6 +803,7 @@ function ConfigPanel() {
         onYes={() => { resetDemoData(); toast("Demo data re-seeded", "info"); }} />
       <Confirm open={confirmSetup} onClose={() => setConfirmSetup(false)} danger
         title={t("a.rerunQ")} body={t("a.rerunBody")} yesLabel={t("a.wipe")} onYes={() => rerunSetup()} />
+      <GeofenceStudio open={geofenceOpen} onClose={() => setGeofenceOpen(false)} />
     </div>
   );
 }

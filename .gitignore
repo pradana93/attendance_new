@@ -4,6 +4,10 @@ dist/
 build/
 *.o
 *.obj
+*.exe
+*.dll
+*.so
+*.a
 *.out
 
 # Dependencies
@@ -11,29 +15,32 @@ node_modules/
 .venv/
 venv/
 __pycache__/
-*.egg-info/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
 
-# Logs and temporary files
-*.log
-*.tmp
+# Editor/IDE files
+.vscode/
+.idea/
 *.swp
 *.swo
+*.tmp
 
-# Environment variables
+# Logs
+*.log
+
+# Environment
 .env
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
 .coverage
 
-# OS generated files
+# System files
 .DS_Store
 Thumbs.db
 ```
