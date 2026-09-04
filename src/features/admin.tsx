@@ -7,7 +7,7 @@ import {
 import type { Lang, Role, User } from "../types";
 import {
   addAnnouncement, addStaff, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
-  getDB, manualLog, rerunSetup, resetDemoData, reviewSelfReport, supabaseSQL, syncSupabase,
+  getDB, manualLog, rerunSetup, resetDemoData, reviewSelfReport, syncSupabase,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
@@ -16,6 +16,7 @@ import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, S
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
+import { testSupabaseConnection, deploySchema, initSupabase } from "../lib/supabase";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -565,6 +566,8 @@ function CloudPanel() {
   const [showSql, setShowSql] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState<{ success: boolean; error?: string } | null>(null);
   const migStarted = useRef(false);
 
   useEffect(() => {
@@ -623,8 +626,13 @@ function CloudPanel() {
           </button>
           {showSql && (
             <div className="a-fadein mt-2">
-              <pre className="no-scrollbar max-h-56 overflow-auto rounded-xl border border-line bg-[#0b0e12] p-3 font-mono text-[10.5px] leading-relaxed text-[#9fb3c8]">{supabaseSQL}</pre>
-              <Btn variant="ghost" className="mt-2 w-full" onClick={() => { navigator.clipboard?.writeText(supabaseSQL).catch(() => {}); toast("SQL copied"); }}><Copy size={13} /> {t("dp.copy")}</Btn>
+              <p className="mb-2 font-mono text-[11px] text-faint">Execute this SQL in your Supabase Dashboard &gt; SQL Editor to create tables:</p>
+              <pre className="no-scrollbar max-h-56 overflow-auto rounded-xl border border-line bg-[#0b0e12] p-3 font-mono text-[10.5px] leading-relaxed text-[#9fb3c8]">-- Tables: users, attendance, picket_logs, point_events, overtime_requests, settings, announcements, feedback\n-- RLS policies enabled for all tables\n-- See src/lib/supabase.ts for full migration script</pre>
+              <Btn variant="ghost" className="mt-2 w-full" onClick={async () => { 
+                const sql = `-- Full migration SQL available in src/lib/supabase.ts\n-- Copy from there and paste into Supabase SQL Editor`;
+                navigator.clipboard?.writeText(sql).catch(() => {}); 
+                toast("SQL instructions copied"); 
+              }}><Copy size={13} /> {t("dp.copy")}</Btn>
             </div>
           )}
         </div>

@@ -192,7 +192,7 @@ export interface SwapOverride {
 
 export type FeedbackType = "bug" | "idea" | "general" | "praise";
 export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
-export type FeedbackStatus = "new" | "in_review" | "planned" | "in_progress" | "shipped" | "wont_fix";
+export type FeedbackStatus = "new" | "review" | "planned" | "progress" | "shipped" | "wont_fix";
 
 export interface Feedback {
   id: string;
@@ -233,4 +233,289 @@ export interface DB {
   swapRequests: SwapRequest[];
   swapOverrides: SwapOverride[];
   feedback: Feedback[];
+}
+
+// Supabase Database Types for type-safe queries
+export interface Database {
+  public: {
+    Tables: {
+      users: {
+        Row: {
+          id: string;
+          email: string;
+          name: string;
+          role: Role;
+          phone?: string;
+          avatar_url?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          name: string;
+          role: Role;
+          phone?: string;
+          avatar_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          name?: string;
+          role?: Role;
+          phone?: string;
+          avatar_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      attendance: {
+        Row: {
+          id: string;
+          user_id: string;
+          check_in: string;
+          check_out?: string;
+          location_lat?: number;
+          location_lng?: number;
+          accuracy?: number;
+          photo_url?: string;
+          notes?: string;
+          status: 'present' | 'late' | 'absent' | 'permission';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          check_in: string;
+          check_out?: string;
+          location_lat?: number;
+          location_lng?: number;
+          accuracy?: number;
+          photo_url?: string;
+          notes?: string;
+          status?: 'present' | 'late' | 'absent' | 'permission';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          check_in?: string;
+          check_out?: string;
+          location_lat?: number;
+          location_lng?: number;
+          accuracy?: number;
+          photo_url?: string;
+          notes?: string;
+          status?: 'present' | 'late' | 'absent' | 'permission';
+          created_at?: string;
+        };
+      };
+      picket_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          task_id: string;
+          task_name: string;
+          scheduled_date: string;
+          completed_at?: string;
+          photo_url?: string;
+          notes?: string;
+          status: 'pending' | 'completed' | 'missed';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          task_id: string;
+          task_name: string;
+          scheduled_date: string;
+          completed_at?: string;
+          photo_url?: string;
+          notes?: string;
+          status?: 'pending' | 'completed' | 'missed';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          task_id?: string;
+          task_name?: string;
+          scheduled_date?: string;
+          completed_at?: string;
+          photo_url?: string;
+          notes?: string;
+          status?: 'pending' | 'completed' | 'missed';
+          created_at?: string;
+        };
+      };
+      point_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          points: number;
+          reason: string;
+          category: 'attendance' | 'picket' | 'overtime' | 'bonus' | 'redemption';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          points: number;
+          reason: string;
+          category: 'attendance' | 'picket' | 'overtime' | 'bonus' | 'redemption';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          points?: number;
+          reason?: string;
+          category?: 'attendance' | 'picket' | 'overtime' | 'bonus' | 'redemption';
+          created_at?: string;
+        };
+      };
+      overtime_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          request_date: string;
+          start_time: string;
+          end_time: string;
+          reason: string;
+          estimated_pay?: number;
+          status: 'pending' | 'approved' | 'rejected';
+          approved_by?: string;
+          approved_at?: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          request_date: string;
+          start_time: string;
+          end_time: string;
+          reason: string;
+          estimated_pay?: number;
+          status?: 'pending' | 'approved' | 'rejected';
+          approved_by?: string;
+          approved_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          request_date?: string;
+          start_time?: string;
+          end_time?: string;
+          reason?: string;
+          estimated_pay?: number;
+          status?: 'pending' | 'approved' | 'rejected';
+          approved_by?: string;
+          approved_at?: string;
+          created_at?: string;
+        };
+      };
+      settings: {
+        Row: {
+          id: string;
+          key: string;
+          value: any;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          value: any;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          value?: any;
+          updated_at?: string;
+        };
+      };
+      announcements: {
+        Row: {
+          id: string;
+          title: string;
+          content: string;
+          priority: 'low' | 'medium' | 'high' | 'urgent';
+          published_at: string;
+          expires_at?: string;
+          created_by?: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          content: string;
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          published_at?: string;
+          expires_at?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          content?: string;
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          published_at?: string;
+          expires_at?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+      };
+      feedback: {
+        Row: {
+          id: string;
+          user_id?: string;
+          type: 'bug' | 'idea' | 'general' | 'praise';
+          priority: 'low' | 'medium' | 'high' | 'urgent';
+          title: string;
+          description: string;
+          screenshot_url?: string;
+          metadata?: any;
+          status: 'new' | 'review' | 'planned' | 'progress' | 'shipped' | 'wont_fix';
+          admin_notes?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          type: 'bug' | 'idea' | 'general' | 'praise';
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          title: string;
+          description: string;
+          screenshot_url?: string;
+          metadata?: any;
+          status?: 'new' | 'review' | 'planned' | 'progress' | 'shipped' | 'wont_fix';
+          admin_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?: 'bug' | 'idea' | 'general' | 'praise';
+          priority?: 'low' | 'medium' | 'high' | 'urgent';
+          title?: string;
+          description?: string;
+          screenshot_url?: string;
+          metadata?: any;
+          status?: 'new' | 'review' | 'planned' | 'progress' | 'shipped' | 'wont_fix';
+          admin_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+    };
+    Views: {};
+    Functions: {};
+    Enums: {};
+  };
 }
