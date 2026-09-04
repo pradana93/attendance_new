@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
 import {
   Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
   Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
@@ -55,58 +54,27 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
   );
 }
 
-/* ---------------- floor radar (leaflet) ---------------- */
+/* ---------------- floor radar (SVG replacement for Leaflet) ---------------- */
 /** deterministic pseudo-random offset per user so dots stay stable across renders */
-function userOffset(id: string, radius: number): { lat: number; lng: number } {
+function userOffset(id: string, radius: number): { x: number; y: number } {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
   const angle = ((Math.abs(h) % 360) * Math.PI) / 180;
   const dist = radius * (0.2 + (Math.abs(h >> 3) % 55) / 100);
+  // Convert meters to SVG pixels (scale factor for visualization)
+  const scale = 0.3; // pixels per meter
   return {
-    lat: (dist * Math.sin(angle)) / 111000,
-    lng: (dist * Math.cos(angle)) / (111000 * 0.75),
+    x: Math.cos(angle) * dist * scale,
+    y: Math.sin(angle) * dist * scale,
   };
 }
 
 function FloorRadar({ onDutyIds }: { onDutyIds: string[] }) {
   const db = getDB();
   const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
-
-  useEffect(() => {
-    if (!db || !ref.current || mapRef.current) return;
-    const { lat, lng, radius } = db.settings;
-    const map = L.map(ref.current, {
-      zoomControl: false, attributionControl: false, dragging: false,
-      scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false,
-    });
-    map.setView([lat, lng], 17);
-    L.circle([lat, lng], { radius, color: "#ffb224", weight: 2, dashArray: "6 6", fillColor: "#ffb224", fillOpacity: 0.08 }).addTo(map);
-    layerRef.current = L.layerGroup().addTo(map);
-    mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
-  }, [db?.settings.lat, db?.settings.lng, db?.settings.radius]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // re-draw on-duty dots whenever the set changes
-  useEffect(() => {
-    if (!db || !mapRef.current || !layerRef.current) return;
-    const { lat, lng } = db.settings;
-    layerRef.current.clearLayers();
-    // beacon
-    L.circleMarker([lat, lng], { radius: 5, color: "#ffb224", weight: 2, fillColor: "#ffb224", fillOpacity: 1 }).addTo(layerRef.current);
-    onDutyIds.forEach((id) => {
-      const u = db.users.find((x) => x.id === id);
-      if (!u) return;
-      const off = userOffset(id, db.settings.radius);
-      L.marker([lat + off.lat, lng + off.lng], {
-        icon: L.divIcon({ className: "", html: `<div class="mk-user"></div>`, iconSize: [15, 15], iconAnchor: [7, 7] }),
-      }).bindTooltip(`${u.name} · ${u.department}`, { direction: "top", offset: L.point(0, -8) }).addTo(layerRef.current!);
-    });
-  }, [onDutyIds.join(","), db?.users.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
   if (!db) return null;
+  const { lat, lng, radius } = db.settings;
+
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center justify-between px-3.5 pt-3">
@@ -115,7 +83,45 @@ function FloorRadar({ onDutyIds }: { onDutyIds: string[] }) {
         </p>
         <Chip tone="ok"><span className="pulse-dot mr-1 inline-block h-1.5 w-1.5 rounded-full bg-ok" /> {onDutyIds.length} {t("lr.live")}</Chip>
       </div>
-      <div ref={ref} className="mt-2 h-[190px] w-full" style={{ zIndex: 0 }} />
+      <div className="relative mt-2 h-[190px] w-full overflow-hidden rounded-lg bg-panel2/40">
+        <svg viewBox="-150 -150 300 300" className="h-full w-full">
+          {/* Grid background */}
+          <defs>
+            <pattern id="radarGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--line)" strokeWidth="0.5" />
+            </pattern>
+            <radialGradient id="radarGrad">
+              <stop offset="0%" stopColor="var(--amber)" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="var(--amber)" stopOpacity="0.02" />
+            </radialGradient>
+          </defs>
+          <rect x="-150" y="-150" width="300" height="300" fill="url(#radarGrid)" />
+          
+          {/* Radar sweep animation */}
+          <circle cx="0" cy="0" r="135" fill="url(#radarGrad)">
+            <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="8s" repeatCount="indefinite" />
+          </circle>
+
+          {/* Geofence circle */}
+          <circle cx="0" cy="0" r={radius * 0.3} fill="var(--amber)" fillOpacity="0.08" stroke="var(--amber)" strokeWidth="2" strokeDasharray="6 4" />
+
+          {/* Center beacon */}
+          <circle cx="0" cy="0" r="5" fill="var(--amber)" />
+
+          {/* User dots */}
+          {onDutyIds.map((id) => {
+            const u = db.users.find((x) => x.id === id);
+            if (!u) return null;
+            const off = userOffset(id, radius);
+            return (
+              <g key={id} transform={`translate(${off.x}, ${off.y})`}>
+                <circle r="7" fill="var(--ok)" stroke="var(--panel1)" strokeWidth="2" />
+                <title>{u.name} · {u.department}</title>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       <p className="border-t border-line2 bg-panel2/60 px-3.5 py-1.5 text-center font-mono text-[9.5px] uppercase tracking-widest text-faint">
         {t("lr.sim")}
       </p>
