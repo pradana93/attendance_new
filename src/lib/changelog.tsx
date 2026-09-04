@@ -17,6 +17,17 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "1.10.0", date: "2026-03-28", name: "Push notifications",
+    items: [
+      { tag: "new", text: "Push notification reminders for Android Chrome PWA — schedule daily clock-in, clock-out and piket duty alerts." },
+      { tag: "new", text: "Notification permission request with graceful fallback when denied." },
+      { tag: "new", text: "Smart scheduling: auto-calculates shift times based on lateTime setting, skips Sundays, repeats daily for clock in/out." },
+      { tag: "new", text: "Piket reminder shows assigned task names when user has duty today." },
+      { tag: "improved", text: "Me tab now shows reminder status with AlarmClock icon and toggle control." },
+      { tag: "improved", text: "Bilingual support for all notification UI (English/Bahasa Indonesia)." },
+    ],
+  },
+  {
     version: "1.9.0", date: "2026-03-25", name: "Feedback loop",
     items: [
       { tag: "new", text: "User feedback system — staff and admins can submit bugs, ideas, praise and general feedback with optional screenshot capture." },
