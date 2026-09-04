@@ -15,8 +15,9 @@ import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } fr
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
+import { FeedbackInbox } from "./feedback";
 
-export type AdminSec = "live" | "staff" | "notice" | "photos" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
@@ -38,7 +39,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         className="no-scrollbar overflow-x-auto [&>button]:shrink-0"
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
-          { id: "photos", label: t("a.photos") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
         ]}
         value={sec} onChange={setSec}
       />
@@ -46,6 +47,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
       {sec === "staff" && <StaffPanel admin={user} />}
       {sec === "notice" && <NoticePanel admin={user} />}
       {sec === "photos" && <PhotosPanel />}
+      {sec === "feedback" && <FeedbackInbox admin={user} />}
       {sec === "cloud" && <CloudPanel />}
       {sec === "config" && <ConfigPanel />}
     </div>

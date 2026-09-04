@@ -301,3 +301,17 @@ export function LiveDot({ tone = "ok" }: { tone?: "ok" | "amber" | "bad" }) {
     </span>
   );
 }
+
+/* ---------------- feedback status badge ---------------- */
+export function StatusBadge({ status }: { status: "new" | "in_review" | "planned" | "in_progress" | "shipped" | "wont_fix" }) {
+  const meta = {
+    new: { label: "New", tone: "amber" as const },
+    in_review: { label: "Review", tone: "cool" as const },
+    planned: { label: "Planned", tone: "ok" as const },
+    in_progress: { label: "Progress", tone: "cool" as const },
+    shipped: { label: "Shipped", tone: "ok" as const },
+    wont_fix: { label: "Won't fix", tone: "bad" as const },
+  };
+  const m = meta[status];
+  return <Chip tone={m.tone}>{m.label}</Chip>;
+}
