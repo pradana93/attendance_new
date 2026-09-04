@@ -575,15 +575,40 @@ function CloudPanel() {
     migStarted.current = true;
     let cancelled = false;
     (async () => {
-      for (let i = 0; i < MIGRATIONS.length; i++) {
-        if (cancelled) return;
-        setMigStep(i);
-        await wait(300);
+      // Step 1: Test connection
+      setMigStep(0);
+      const connTest = await testSupabaseConnection(url, key);
+      if (!connTest.success && !cancelled) {
+        toast(connTest.error || "Connection failed", "err");
+        setStep(1);
+        migStarted.current = false;
+        setMigStep(-1);
+        return;
       }
+      if (cancelled) return;
+      
+      // Step 2: Deploy schema
+      setMigStep(1);
+      await wait(500);
+      const deployResult = await deploySchema(url, key);
+      if (!deployResult.success && !cancelled) {
+        toast(deployResult.error || "Schema deployment failed", "err");
+        setStep(1);
+        migStarted.current = false;
+        setMigStep(-1);
+        return;
+      }
+      if (cancelled) return;
+      
+      // Step 3: Initialize client
+      setMigStep(2);
+      initSupabase(url, key);
+      await wait(300);
+      
       if (!cancelled) window.setTimeout(() => !cancelled && setStep(3), 350);
     })();
     return () => { cancelled = true; migStarted.current = false; };
-  }, [step]);
+  }, [step, url, key]);
 
   if (!db || !supa) return null;
 
@@ -715,9 +740,13 @@ function CloudPanel() {
           </div>
           <Btn variant="ghost" className="w-full" busy={testing} onClick={async () => {
             setTesting(true);
-            await wait(1100);
+            const result = await testSupabaseConnection(url, key);
             setTesting(false);
-            toast("Connection OK · latency 42ms · Postgres 15", "ok");
+            if (result.success) {
+              toast(`Connection OK · Postgres 15`, "ok");
+            } else {
+              toast(result.error || "Connection failed", "err");
+            }
           }}><Activity size={14} /> {testing ? t("dp.testing") : t("dp.test")}</Btn>
           <Btn className="w-full" onClick={() => { connectSupabase(url.trim(), key.trim()); toast(`${t("dp.connected")} ✓`, "ok"); }}>
             <Cloud size={15} /> {t("dp.saveConnect")}

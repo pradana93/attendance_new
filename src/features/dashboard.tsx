@@ -6,7 +6,7 @@ import {
   QrCode, ScanFace, Search, Send, Star, Sun, Thermometer, Timer, User as UserIcon, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
-import { addHandover, completePiket, confirmHandover, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord, userName } from "../lib/store";
+import { completePiket, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord, userName } from "../lib/store";
 import { copyText, fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, relTime, todayKey, vibrate, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
@@ -39,7 +39,6 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
   const [ann, setAnn] = useState<Announcement | null>(null);
   const [geo, setGeo] = useState<{ dist: number; simulated: boolean } | null>(null);
   const [proofTask, setProofTask] = useState<{ task: PiketTask; date: string } | null>(null);
-  const [handoverOpen, setHandoverOpen] = useState(false);
   const [wx, setWx] = useState<{ t: number; code: number; w: number } | null>(null);
 
   // live dock weather at the warehouse GPS (open-meteo, no key needed)
@@ -271,9 +270,6 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
         </button>
       )}
 
-      {/* shift handover */}
-      <HandoverCard user={user} onWrite={() => setHandoverOpen(true)} />
-
       {/* announcements */}
       <Reveal delay={60}>
       <div>
@@ -360,9 +356,6 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
         title={proofTask ? `${proofTask.task.name} — ${t("p.takeProof")}` : ""}
         onSave={(photo) => proofTask && finishTask(proofTask.task, photo)}
       />
-
-      {/* write shift handover */}
-      <HandoverSheet user={user} open={handoverOpen} onClose={() => setHandoverOpen(false)} />
     </div>
   );
 }
@@ -784,108 +777,6 @@ function WxCard({ wx }: { wx: { t: number; code: number; w: number } }) {
       {info.rain ? <Chip tone="cool"><CloudRain size={11} /> {t("w.rainHint")}</Chip>
         : <span className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-widest text-faint"><LiveDot tone="amber" /> {t("w.live")}</span>}
     </div>
-  );
-}
-
-/* =============== shift handover =============== */
-const SHIFT_KEY: Record<string, "h.morning" | "h.afternoon" | "h.night"> = {
-  morning: "h.morning", afternoon: "h.afternoon", night: "h.night",
-};
-
-function HandoverCard({ user, onWrite }: { user: User; onWrite: () => void }) {
-  const db = getDB();
-  const t = useT();
-  if (!db) return null;
-  const list = [...db.handovers].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 2);
-  return (
-    <Reveal delay={40}>
-      <div className="card p-3.5">
-        <div className="mb-2.5 flex items-center justify-between">
-          <SectionTitle>
-            <span className="inline-flex items-center gap-1.5"><ArrowLeftRight size={14} className="text-amber" /> {t("h.title")}</span>
-          </SectionTitle>
-          <button onClick={onWrite} className="tap flex items-center gap-1 font-mono text-[11px] text-amber hover:underline">
-            <Send size={12} /> {t("h.write")}
-          </button>
-        </div>
-        {list.length === 0 ? (
-          <p className="py-2 text-center font-mono text-[11.5px] text-faint">{t("h.empty")}</p>
-        ) : (
-          <div className="space-y-2">
-            {list.map((h) => {
-              const author = db.users.find((u) => u.id === h.fromUserId);
-              const canConfirm = !h.confirmedBy && h.fromUserId !== user.id;
-              return (
-                <div key={h.id} className={`card2 p-3 ${h.issue ? "border-l-[3px] border-l-bad" : ""}`}>
-                  <div className="flex items-center gap-2">
-                    <Chip tone={h.shiftId === "night" ? "cool" : h.shiftId === "morning" ? "amber" : "ok"}>
-                      {t(SHIFT_KEY[h.shiftId] ?? "h.morning")}
-                    </Chip>
-                    <p className="truncate text-[12px] font-semibold text-ink">{author?.name ?? "—"}</p>
-                    <span className="ml-auto shrink-0 font-mono text-[9.5px] text-faint">{fmtDate(h.date)} · {fmtTime(h.createdAt)}</span>
-                  </div>
-                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-mut">{h.note}</p>
-                  {h.issue && (
-                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-bad/8 px-2.5 py-1.5 text-[11.5px] leading-snug text-bad">
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" /> {h.issue}
-                    </p>
-                  )}
-                  <div className="mt-2">
-                    {h.confirmedBy ? (
-                      <Chip tone="ok"><Check size={11} /> {t("h.confirmed")} · {userName(h.confirmedBy)}</Chip>
-                    ) : canConfirm ? (
-                      <Btn variant="ghost" className="!px-3 !py-1.5 text-[12px]" onClick={() => { confirmHandover(h.id, user.id); toast(`${t("h.confirm")} ✓`, "ok"); }}>
-                        <Check size={13} /> {t("h.confirm")}
-                      </Btn>
-                    ) : (
-                      <Chip tone="amber">{t("h.awaiting")}</Chip>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Reveal>
-  );
-}
-
-function HandoverSheet({ user, open, onClose }: { user: User; open: boolean; onClose: () => void }) {
-  const t = useT();
-  const [shift, setShift] = useState<"morning" | "afternoon" | "night">("morning");
-  const [note, setNote] = useState("");
-  const [issue, setIssue] = useState("");
-  useEffect(() => {
-    if (open) {
-      const h = new Date().getHours();
-      setShift(h < 12 ? "morning" : h < 17 ? "afternoon" : "night");
-      setNote(""); setIssue("");
-    }
-  }, [open]);
-  return (
-    <Sheet open={open} onClose={onClose} title={t("h.write")}>
-      <div className="space-y-3.5">
-        <Field label={t("h.shift")}>
-          <Seg value={shift} onChange={setShift} options={[
-            { id: "morning", label: t("h.morning") }, { id: "afternoon", label: t("h.afternoon") }, { id: "night", label: t("h.night") },
-          ]} />
-        </Field>
-        <Field label={t("h.note")}>
-          <textarea className="inp min-h-[84px] resize-none" value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder="Container status, pending loads, equipment condition…" />
-        </Field>
-        <Field label={t("h.issue")}>
-          <input className="inp" value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="Rolling door B2 macet…" />
-        </Field>
-        <Btn className="w-full" disabled={!note.trim()} onClick={() => {
-          const res = addHandover(user.id, todayKey(), shift, note.trim(), issue);
-          toast(res.msg, res.ok ? "ok" : "err");
-          if (res.ok) onClose();
-        }}><Send size={15} /> {t("h.post")}</Btn>
-        <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">{t("h.forCrew")}</p>
-      </div>
-    </Sheet>
   );
 }
 
