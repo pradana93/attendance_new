@@ -101,6 +101,15 @@ const en = {
   "m.notifyApproval": "Notify on approvals", "m.session": "Session", "m.jwt": "JWT · 1h expiry · auto-renew",
   "m.leaveReason": "Reason for leave", "m.submit": "Submit", "m.profile": "Profile", "m.supabase": "Supabase cloud",
   "m.offline": "offline cache",
+  // notifications
+  "n.title": "Push reminders", "n.enable": "Enable reminders", "n.disable": "Disable reminders",
+  "n.clockIn": "Clock-in reminder", "n.clockOut": "Clock-out reminder", "n.piket": "Piket duty reminder",
+  "n.clockInDesc": "Get notified before your shift starts", "n.clockOutDesc": "Reminder to check out at end of shift",
+  "n.piketDesc": "Reminder when you have piket duty today",
+  "n.permissionReq": "Notification permission required", "n.permissionBody": "Please allow notifications in your browser settings to receive reminders.",
+  "n.scheduled": "Reminders scheduled", "n.cancelled": "Reminders cancelled",
+  "n.nextClockIn": "Next clock-in reminder", "n.nextClockOut": "Next clock-out reminder",
+  "n.noReminders": "No active reminders", "n.manage": "Manage reminders",
   // handover
   "h.title": "Shift handover", "h.write": "Write handover", "h.confirm": "Confirm received",
   "h.note": "Handover note", "h.issue": "Pending issue (optional)", "h.shift": "Your shift",
@@ -242,6 +251,15 @@ const id: Record<TKey, string> = {
   "m.notifyApproval": "Notifikasi persetujuan", "m.session": "Sesi", "m.jwt": "JWT · kedaluwarsa 1 jam · perpanjang otomatis",
   "m.leaveReason": "Alasan cuti", "m.submit": "Kirim", "m.profile": "Profil", "m.supabase": "Cloud Supabase",
   "m.offline": "cache offline",
+  // notifications
+  "n.title": "Pengingat push", "n.enable": "Aktifkan pengingat", "n.disable": "Matikan pengingat",
+  "n.clockIn": "Pengingat masuk", "n.clockOut": "Pengingat keluar", "n.piket": "Pengingat piket",
+  "n.clockInDesc": "Dapatkan notifikasi sebelum shift dimulai", "n.clockOutDesc": "Pengingat untuk absen pulang",
+  "n.piketDesc": "Pengingat saat Anda dapat tugas piket hari ini",
+  "n.permissionReq": "Izin notifikasi diperlukan", "n.permissionBody": "Mohon izinkan notifikasi di pengaturan browser untuk menerima pengingat.",
+  "n.scheduled": "Pengingat dijadwalkan", "n.cancelled": "Pengingat dibatalkan",
+  "n.nextClockIn": "Pengingat masuk berikutnya", "n.nextClockOut": "Pengingat keluar berikutnya",
+  "n.noReminders": "Tidak ada pengingat aktif", "n.manage": "Kelola pengingat",
   // handover
   "h.title": "Operan shift", "h.write": "Tulis operan", "h.confirm": "Konfirmasi terima",
   "h.note": "Catatan operan", "h.issue": "Masalah terbuka (opsional)", "h.shift": "Shift Anda",

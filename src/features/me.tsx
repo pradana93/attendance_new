@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare,
+  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock,
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings } from "../lib/store";
@@ -9,6 +9,7 @@ import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, StatusBadge, Toggle, toast } from "../components/ui";
 import { FeedbackSheet } from "./feedback";
+import * as notif from "../lib/notifications";
 
 export default function Me({ user, onChangelog, onFeedback }: { user: User; onChangelog: () => void; onFeedback?: () => void }) {
   const db = getDB();
@@ -19,10 +20,77 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(notif.getPermission());
+  
+  useEffect(() => {
+    // Check if reminders are enabled on mount
+    const activeTimers = notif.loadActiveReminders();
+    setNotifEnabled(activeTimers.length > 0 || notifPermission === 'granted');
+  }, [notifPermission]);
+  
   if (!db) return null;
   const s = db.settings;
   const balance = leaveBalance(user.id);
   const myLeaves = db.leaves.filter((l) => l.userId === user.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  
+  const handleToggleReminders = async () => {
+    if (notifEnabled) {
+      // Disable reminders
+      const timers = notif.loadActiveReminders();
+      notif.clearAllReminders(timers);
+      setNotifEnabled(false);
+      toast(t("n.cancelled"), "info");
+    } else {
+      // Enable reminders - request permission first
+      const granted = await notif.requestPermission();
+      if (!granted) {
+        toast(t("n.permissionBody"), "err");
+        return;
+      }
+      setNotifPermission('granted');
+      
+      // Schedule clock-in reminder
+      const clockInTime = notif.getNextClockInTime(s.lateTime);
+      notif.scheduleReminder({
+        id: `clockin-${user.id}`,
+        type: 'clock_in',
+        title: t("n.clockIn"),
+        body: notif.getClockInMessage(user.name, s.lateTime),
+        scheduledAt: clockInTime.getTime(),
+        repeatDaily: true,
+      });
+      
+      // Schedule clock-out reminder
+      const clockOutTime = notif.getNextClockOutTime(s.lateTime);
+      notif.scheduleReminder({
+        id: `clockout-${user.id}`,
+        type: 'clock_out',
+        title: t("n.clockOut"),
+        body: notif.getClockOutMessage(),
+        scheduledAt: clockOutTime.getTime(),
+        repeatDaily: true,
+      });
+      
+      // Schedule piket reminder if user has duty today
+      const myPiketToday = db.template.filter((a) => a.day === new Date().getDay() && a.userId === user.id);
+      if (myPiketToday.length > 0) {
+        const piketTime = notif.getNextPiketTime();
+        const taskNames = myPiketToday.map((a) => db.tasks.find((t) => t.id === a.taskId)?.name || '').filter(Boolean).join(', ');
+        notif.scheduleReminder({
+          id: `piket-${user.id}`,
+          type: 'piket',
+          title: t("n.piket"),
+          body: notif.getPiketMessage(taskNames),
+          scheduledAt: piketTime.getTime(),
+          repeatDaily: false,
+        });
+      }
+      
+      setNotifEnabled(true);
+      toast(t("n.scheduled"), "ok");
+    }
+  };
 
   return (
     <div className="a-fadein stagger space-y-3">
@@ -76,6 +144,20 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
         </div>
         <Chip tone="cool">send</Chip>
       </button>
+
+      {/* push notifications toggle */}
+      <div className="card flex items-center gap-3 p-4">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${notifEnabled ? 'bg-amber/12 text-amber' : 'bg-mut/12 text-mut'}`}>
+          <AlarmClock size={18} />
+        </span>
+        <div className="flex-1">
+          <p className="ttl text-[13px] font-bold text-ink">{t("n.title")}</p>
+          <p className="font-mono text-[11px] text-faint">
+            {notifEnabled ? t("n.scheduled") : t("n.noReminders")}
+          </p>
+        </div>
+        <Toggle on={notifEnabled} onChange={handleToggleReminders} />
+      </div>
 
       {/* feedback sheet */}
       <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} />
