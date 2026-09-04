@@ -76,7 +76,7 @@ export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () =
   const radiusPx = radiusToPx(temp.radius);
 
   return (
-    <Sheet open={open} onClose={onClose} size="lg" title={t("a.editGeo")}>
+    <Sheet open={open} onClose={onClose} title={t("a.editGeo")} wide>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
