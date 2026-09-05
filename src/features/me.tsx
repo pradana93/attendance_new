@@ -3,7 +3,8 @@ import {
   Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock,
 } from "lucide-react";
 import type { Lang, User } from "../types";
-import { getDB, leaveBalance, logout, requestLeave, setNotifPref, updateSettings } from "../lib/store";
+import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
+import { signOut } from "../lib/production";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
@@ -11,7 +12,7 @@ import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Sta
 import { FeedbackSheet } from "./feedback";
 import * as notif from "../lib/notifications";
 
-export default function Me({ user, onChangelog, onFeedback }: { user: User; onChangelog: () => void; onFeedback?: () => void }) {
+export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: User; onLogout: () => void; onChangelog: () => void; onFeedback?: () => void }) {
   const db = getDB();
   const t = useT();
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -248,7 +249,7 @@ export default function Me({ user, onChangelog, onFeedback }: { user: User; onCh
 
       <Confirm open={confirmOut} onClose={() => setConfirmOut(false)} danger
         title={t("c.logoutQ")} body={t("c.logoutBody")} yesLabel={t("c.logout")}
-        onYes={() => { logout(); }} />
+        onYes={() => { void signOut(); onLogout(); }} />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export interface Reminder {
   repeatDaily?: boolean;
 }
 
-const REMINDER_KEY = 'shiftgate.reminders.v1';
+let activeReminderIds: number[] = [];
 
 /** Check if browser supports notifications */
 export function isSupported(): boolean {
@@ -130,29 +130,20 @@ export function getNextPiketTime(): Date {
   return target;
 }
 
-/** Save active reminder timers to localStorage */
+/** Keep active reminder timers for this browser session only. */
 export function saveActiveReminders(timerIds: number[]): void {
-  try {
-    localStorage.setItem(REMINDER_KEY, JSON.stringify(timerIds));
-  } catch {
-    // Storage full or unavailable
-  }
+  activeReminderIds = [...timerIds];
 }
 
-/** Load active reminder timers from localStorage */
+/** Load active reminder timers for this browser session. */
 export function loadActiveReminders(): number[] {
-  try {
-    const raw = localStorage.getItem(REMINDER_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [...activeReminderIds];
 }
 
 /** Clear all scheduled reminders */
 export function clearAllReminders(timerIds: number[]): void {
   timerIds.forEach((id) => clearTimeout(id));
-  localStorage.removeItem(REMINDER_KEY);
+  activeReminderIds = [];
 }
 
 /** Format time for notification display */

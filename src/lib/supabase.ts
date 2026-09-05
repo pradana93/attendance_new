@@ -37,7 +37,7 @@ export interface SupabaseConnectionResult {
 export async function testSupabaseConnection(url: string, key: string): Promise<SupabaseConnectionResult> {
   try {
     const client = createClient<Database>(url, key);
-    const { data, error } = await client.from('settings').select('id').limit(1);
+    const { data, error } = await client.from('workspace_settings').select('workspace_id').limit(1);
 
     if (error) {
       // PostgREST reports a missing table as a schema-cache error rather than

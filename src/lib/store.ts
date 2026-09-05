@@ -21,7 +21,7 @@ let cache: DB | null = null;
 const subs = new Set<() => void>();
 export const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 const emit = () => subs.forEach((f) => f());
-const persist = () => { try { localStorage.setItem(DB_KEY, JSON.stringify(cache)); } catch { /* storage full */ } };
+const persist = () => { /* Supabase is the production source of truth. */ };
 const mutate = () => { persist(); emit(); };
 
 export const getDB = () => cache;
@@ -48,7 +48,8 @@ const seedTasks = (): PiketTask[] => [
 ];
 
 function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: string, hue: number, password = "shift123", faceEnrolled = true): User {
-  return { id, name, email, password, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
+  void password;
+  return { id, name, email, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
 }
 
 /** Compact SVG "evidence photo" used to seed the gallery without bloating localStorage */
@@ -258,15 +259,7 @@ export const APP_VERSION = "2.2.0";
 /* ================= lifecycle ================= */
 export function initStore() {
   if (cache) return;
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    const parsed = raw ? (JSON.parse(raw) as DB) : null;
-    cache = parsed && parsed.version === VERSION ? parsed : emptyDB();
-    if (!parsed || parsed.version !== VERSION) persist();
-  } catch {
-    cache = emptyDB();
-    persist();
-  }
+  cache = emptyDB();
 }
 
 export function hasWorkspace() {
@@ -275,7 +268,6 @@ export function hasWorkspace() {
 }
 
 export function rerunSetup() {
-  try { localStorage.removeItem(DB_KEY); sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
   cache = null;
   initStore();
   const fresh = { ...cache!, users: [], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], announcements: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [], feedback: [] };
@@ -297,54 +289,16 @@ export function completeSetup(args: { appName: string; company: string; logo?: s
 
 /* ================= auth ================= */
 export function login(email: string, password: string, remember: boolean): { ok: boolean; user?: User; msg?: string } {
-  initStore();
-  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
-  if (!u || u.password !== password) return { ok: false, msg: "Invalid email or password." };
-  if (!u.active) return { ok: false, msg: "This account has been deactivated. Contact your admin." };
-  const session = { userId: u.id, exp: Date.now() + 60 * 60 * 1000 }; // JWT-style 1h expiry
-  const store = remember ? localStorage : sessionStorage;
-  store.setItem(SESSION_KEY, JSON.stringify(session));
-  if (remember) localStorage.setItem(REMEMBER_KEY, "1");
-  emit();
-  return { ok: true, user: u };
+  void email; void password; void remember;
+  return { ok: false, msg: "Use Supabase Auth sign-in." };
 }
 
 export function logout() {
-  sessionStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(SESSION_KEY);
   emit();
 }
 
 export function getSessionUser(): User | null {
-  initStore();
-  const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    const s = JSON.parse(raw) as { userId: string; exp: number };
-    if (Date.now() > s.exp) { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); return null; }
-    return cache!.users.find((u) => u.id === s.userId) ?? null;
-  } catch { return null; }
-}
-
-export function requestReset(email: string): { ok: boolean; msg: string; token?: string; name?: string } {
-  initStore();
-  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
-  if (!u) return { ok: false, msg: "No account found for that email." };
-  const token = Array.from({ length: 24 }, () => "abcdef0123456789"[Math.floor(Math.random() * 16)]).join("");
-  pushNotif(u.id, "Password reset", `Reset link delivered via Gmail SMTP (valid 30 min).`);
-  return { ok: true, msg: `Reset link sent to ${u.email}.`, token, name: u.name };
-}
-
-/** Consume a reset token and set a new password */
-export function resetPassword(email: string, newPassword: string): { ok: boolean; msg: string } {
-  initStore();
-  const u = cache!.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
-  if (!u) return { ok: false, msg: "Account not found." };
-  if (newPassword.length < 6) return { ok: false, msg: "Password must be at least 6 characters." };
-  u.password = newPassword;
-  persist();
-  pushNotif(u.id, "Password changed", "Your password was updated via the reset link.");
-  return { ok: true, msg: "Password updated — sign in with your new password." };
+  return null;
 }
 
 export const userById = (id: string) => cache?.users.find((u) => u.id === id);

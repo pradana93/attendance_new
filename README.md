@@ -53,7 +53,7 @@ The browser UI currently has workspace bootstrap and local configuration only. S
 
 ## Data layer
 
-The local store (`src/lib/store.ts`) currently persists workspace bootstrap/configuration to `localStorage`; it is not a cloud synchronization layer.
+The UI cache (`src/lib/store.ts`) is in-memory only. Production records are read from and written to Supabase.
 
 ```
 users · attendance · piket_tasks · template (task × day × assignee) · piket_log

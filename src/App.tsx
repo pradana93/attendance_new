@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon, WifiOff } from "lucide-react";
 import type { User } from "./types";
-import { getDB, getSessionUser, hasWorkspace, initStore, logout, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
+import { getDB, initStore, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
 import { fmtClock, fmtDate, relTime } from "./lib/util";
 import { useT } from "./lib/i18n";
 import { APP_VERSION } from "./lib/store";
 import { Avatar, Btn, Chip, Confirm, LiveDot, Seg, Sheet, Toggle, handleHardwareBack, toast } from "./components/ui";
 import { ChangelogSheet } from "./lib/changelog";
-import SetupWizard from "./features/setup";
+import ProductionSetup from "./features/production-setup";
 import Login from "./features/auth";
 import Dashboard from "./features/dashboard";
 import Schedule from "./features/schedule";
@@ -15,6 +15,8 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
+import { currentProductionUser, signOut } from "./lib/production";
+import { hasProductionConfiguration } from "./lib/production";
 
 initStore();
 
@@ -35,34 +37,41 @@ const navUrl = (s: NavState) => `#/${s.tab}${s.sec !== "live" ? "/" + s.sec : ""
 export default function App() {
   const db = useDB();
   const [booting, setBooting] = useState(true);
-  const [sessionTick, setSessionTick] = useState(0);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [cloudReady, setCloudReady] = useState(hasProductionConfiguration);
+  const [cur, setCur] = useState<User | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setBooting(false), 950);
     return () => clearTimeout(t);
   }, []);
 
-  const cur = useMemo(() => getSessionUser(), [db, sessionTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!cloudReady) { setAuthChecking(false); return; }
+    setAuthChecking(true);
+    currentProductionUser().then(setCur).finally(() => setAuthChecking(false));
+  }, [cloudReady]);
 
   if (booting) return <Splash />;
   if (!db) return null;
-  if (!hasWorkspace()) return <SetupWizard />;
+  if (!cloudReady) return <ProductionSetup onReady={() => setCloudReady(true)} />;
+  if (authChecking) return <Splash />;
   if (!cur)
     return (
       <>
-        <Login onLogin={() => setSessionTick((t) => t + 1)} onChangelog={() => setChangelogOpen(true)} />
+        <Login onLogin={setCur} onChangelog={() => setChangelogOpen(true)} />
         <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </>
     );
   return (
     <>
-      <Shell user={cur} onChangelog={() => setChangelogOpen(true)} />
+      <Shell user={cur} onLogout={() => { void signOut(); setCur(null); }} onChangelog={() => setChangelogOpen(true)} />
       <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </>
   );
 }
 
-const BOOT_LINES = ["mount local store", "load geofence beacon", "arm face model", "open gate"];
+const BOOT_LINES = ["connect Supabase", "load workspace profile", "verify session", "open gate"];
 
 function Splash() {
   const db = getDB();
@@ -100,7 +109,7 @@ function Splash() {
   );
 }
 
-function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
+function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => void; onChangelog: () => void }) {
   const db = useDB();
   const t = useT();
   const isAdmin = user.role !== "staff";
@@ -236,7 +245,7 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
           {tab === "piket" && <Schedule user={user} />}
           {tab === "stats" && <Performance user={user} />}
           {tab === "ot" && <Overtime user={user} />}
-          {tab === "fifth" && (isAdmin ? <Admin user={user} sec={adminSec} onSec={goAdminSec} /> : <Me user={user} onChangelog={onChangelog} />)}
+          {tab === "fifth" && (isAdmin ? <Admin user={user} sec={adminSec} onSec={goAdminSec} /> : <Me user={user} onLogout={onLogout} onChangelog={onChangelog} />)}
         </div>
       </main>
 
@@ -281,13 +290,13 @@ function Shell({ user, onChangelog }: { user: User; onChangelog: () => void }) {
         </div>
       </Sheet>
 
-      <ProfileSheet user={user} open={profileOpen} onClose={() => setProfileOpen(false)} onChangelog={onChangelog} />
+      <ProfileSheet user={user} open={profileOpen} onClose={() => setProfileOpen(false)} onLogout={onLogout} onChangelog={onChangelog} />
     </div>
   );
 }
 
 /* =============== profile sheet — logout, changelog, prefs, install =============== */
-function ProfileSheet({ user, open, onClose, onChangelog }: { user: User; open: boolean; onClose: () => void; onChangelog: () => void }) {
+function ProfileSheet({ user, open, onClose, onLogout, onChangelog }: { user: User; open: boolean; onClose: () => void; onLogout: () => void; onChangelog: () => void }) {
   const db = useDB();
   const t = useT();
   const [confirmOut, setConfirmOut] = useState(false);
@@ -376,7 +385,7 @@ function ProfileSheet({ user, open, onClose, onChangelog }: { user: User; open: 
       </Sheet>
 
       <Confirm open={confirmOut} onClose={() => setConfirmOut(false)} danger title={t("c.logoutQ")} body={t("c.logoutBody")}
-        yesLabel={t("c.logout")} onYes={() => { logout(); onClose(); }} />
+        yesLabel={t("c.logout")} onYes={() => { onLogout(); onClose(); }} />
     </>
   );
 }

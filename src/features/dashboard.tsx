@@ -6,7 +6,8 @@ import {
   QrCode, ScanFace, Search, Send, Star, Sun, Thermometer, Timer, User as UserIcon, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
-import { completePiket, getDB, leaderboard, myPiketToday, punch, selfReport, statsFor, todayRecord, userName } from "../lib/store";
+import { completePiket, getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName } from "../lib/store";
+import { punchAttendance, todayAttendance } from "../lib/production";
 import { copyText, fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, relTime, todayKey, vibrate, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
@@ -40,6 +41,7 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
   const [geo, setGeo] = useState<{ dist: number; simulated: boolean } | null>(null);
   const [proofTask, setProofTask] = useState<{ task: PiketTask; date: string } | null>(null);
   const [wx, setWx] = useState<{ t: number; code: number; w: number } | null>(null);
+  const [remoteRec, setRemoteRec] = useState<Attendance | null>(null);
 
   // live dock weather at the warehouse GPS (open-meteo, no key needed)
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
       .catch(() => { /* offline — card stays hidden */ });
     return () => { on = false; };
   }, [db?.settings.lat, db?.settings.lng]); // eslint-disable-line react-hooks/exhaustive-deps
-  const rec = todayRecord(user.id);
+  const rec = remoteRec ?? todayRecord(user.id);
   const stats = useMemo(() => statsFor(user.id), [user.id, now.getMinutes()]); // eslint-disable-line react-hooks/exhaustive-deps
   const kind: Kind = rec?.checkIn && rec?.checkOut ? "done" : rec?.checkIn ? "out" : "in";
   const hour = now.getHours();
@@ -84,6 +86,12 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
     });
     return () => { stop = true; };
   }, [db?.settings.lat, db?.settings.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let active = true;
+    todayAttendance(user.id, todayKey()).then((next) => { if (active) setRemoteRec(next); }).catch(() => { /* cloud status is shown by the app shell */ });
+    return () => { active = false; };
+  }, [user.id]);
 
   const finishTask = (task: PiketTask, photo?: string) => {
     const res = completePiket(todayKey(), task.id, user.id, photo);
@@ -477,6 +485,7 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
   const [cam, setCam] = useState<"busy" | "ok" | "denied">("busy");
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{ ok: boolean; kind: Kind; score?: number; dist: number; method: string; reason?: string; rec?: Attendance } | null>(null);
+  const [remoteRec, setRemoteRec] = useState<Attendance | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const openRef = useRef(open);
@@ -551,9 +560,9 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
     return () => clearTimeout(to);
   }, [stage, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const finish = (method: "face" | "qr") => {
+  const finish = async (method: "face" | "qr") => {
     if (!db || !openRef.current) return;
-    const rec = todayRecord(user.id);
+    const rec = remoteRec ?? todayRecord(user.id);
     const kind: Kind = rec?.checkIn && rec?.checkOut ? "done" : rec?.checkIn ? "out" : "in";
     const score = method === "face" ? randInt(88, 99) : undefined;
     if (kind === "done") {
@@ -562,13 +571,20 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
       setStage("result");
       return;
     }
-    const punched = punch(user.id, kind, { score, distance: gps.dist, method });
-    setResult({ ok: true, kind, score, dist: gps.dist, method, rec: punched ?? undefined });
+    let punched: Attendance;
+    try {
+      punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late: false, early: false, score, distance: gps.dist, method });
+      setRemoteRec(punched);
+      setResult({ ok: true, kind, score, dist: gps.dist, method, rec: punched });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Attendance could not be saved", "err");
+      return;
+    }
     setStage("result");
     onDone();
     vibrate(kind === "in" ? [40, 60, 90] : [40, 60, 40]);
     confetti({ particleCount: kind === "in" ? 90 : 60, spread: 75, origin: { y: 0.65 }, colors: ["#ffb224", "#3ed598", "#5ac8e8", "#e8edf3"], disableForReducedMotion: true });
-    toast(kind === "in" ? `${t("f.checkedIn")} · ${fmtTime(punched?.checkIn)}` : `${t("f.checkedOut")}`, "ok");
+    toast(kind === "in" ? `${t("f.checkedIn")} · ${fmtTime(punched.checkIn)}` : `${t("f.checkedOut")}`, "ok");
   };
 
   const doSelfReport = () => {

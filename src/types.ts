@@ -6,7 +6,6 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password: string; // demo only — in production Supabase Auth handles credentials
   role: Role;
   employeeId: string;
   department: string;
