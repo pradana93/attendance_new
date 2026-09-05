@@ -27,24 +27,33 @@ export function clearSupabase(): void {
   supabaseInstance = null;
 }
 
+export interface SupabaseConnectionResult {
+  success: boolean;
+  schemaReady: boolean;
+  error?: string;
+}
+
 // Helper to check connection
-export async function testSupabaseConnection(url: string, key: string): Promise<{ success: boolean; error?: string }> {
+export async function testSupabaseConnection(url: string, key: string): Promise<SupabaseConnectionResult> {
   try {
     const client = createClient<Database>(url, key);
     const { data, error } = await client.from('settings').select('id').limit(1);
-    
+
     if (error) {
-      // Table might not exist yet, which is okay for initial setup
-      if (error.code === '42P01') { // undefined_table
-        return { success: true, error: undefined };
+      // PostgREST reports a missing table as a schema-cache error rather than
+      // PostgreSQL's undefined_table error. The project is reachable, but the
+      // application schema still needs to be installed manually.
+      if (error.code === '42P01' || error.code === 'PGRST205' || error.message.toLowerCase().includes('schema cache')) {
+        return { success: true, schemaReady: false };
       }
-      return { success: false, error: error.message };
+      return { success: false, schemaReady: false, error: error.message };
     }
-    
-    return { success: true };
+
+    return { success: true, schemaReady: true };
   } catch (e) {
     return { 
       success: false, 
+      schemaReady: false,
       error: e instanceof Error ? e.message : 'Unknown connection error' 
     };
   }
@@ -274,7 +283,7 @@ CREATE POLICY "Admins can update feedback" ON feedback
     console.log(migrations);
     
     // Attempt to create settings table first as a test
-    const { error: settingsError } = await client.rpc('exec_sql', { sql: migrations });
+    const { error: settingsError } = await client.rpc('exec_sql', { sql: migrations } as never);
     
     if (settingsError && settingsError.message.includes('function exec_sql does not exist')) {
       // RPC method not available, return SQL for manual execution

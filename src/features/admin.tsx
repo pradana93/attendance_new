@@ -16,7 +16,7 @@ import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, S
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
-import { testSupabaseConnection, deploySchema, initSupabase } from "../lib/supabase";
+import { testSupabaseConnection, initSupabase } from "../lib/supabase";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -566,8 +566,7 @@ function CloudPanel() {
   const [showSql, setShowSql] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
-  const [deploying, setDeploying] = useState(false);
-  const [deployResult, setDeployResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [schemaReady, setSchemaReady] = useState(false);
   const migStarted = useRef(false);
 
   useEffect(() => {
@@ -587,20 +586,12 @@ function CloudPanel() {
       }
       if (cancelled) return;
       
-      // Step 2: Deploy schema
+      setSchemaReady(connTest.schemaReady);
+
+      // The anon key cannot execute DDL. Schema installation must be run in
+      // Supabase SQL Editor, then verified from this screen.
       setMigStep(1);
       await wait(500);
-      const deployResult = await deploySchema(url, key);
-      if (!deployResult.success && !cancelled) {
-        toast(deployResult.error || "Schema deployment failed", "err");
-        setStep(1);
-        migStarted.current = false;
-        setMigStep(-1);
-        return;
-      }
-      if (cancelled) return;
-      
-      // Step 3: Initialize client
       setMigStep(2);
       initSupabase(url, key);
       await wait(300);
@@ -743,12 +734,14 @@ function CloudPanel() {
             const result = await testSupabaseConnection(url, key);
             setTesting(false);
             if (result.success) {
-              toast(`Connection OK · Postgres 15`, "ok");
+              setSchemaReady(result.schemaReady);
+              toast(result.schemaReady ? `Connection OK · schema ready` : `Project reachable · schema not installed`, result.schemaReady ? "ok" : "info");
             } else {
               toast(result.error || "Connection failed", "err");
             }
           }}><Activity size={14} /> {testing ? t("dp.testing") : t("dp.test")}</Btn>
-          <Btn className="w-full" onClick={() => { connectSupabase(url.trim(), key.trim()); toast(`${t("dp.connected")} ✓`, "ok"); }}>
+          {!schemaReady && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[11.5px] leading-relaxed text-mut">The project is reachable, but <span className="font-mono text-ink">public.settings</span> is missing. Run the schema SQL in Supabase SQL Editor, then test again.</p>}
+          <Btn className="w-full" disabled={!schemaReady} onClick={() => { connectSupabase(url.trim(), key.trim()); toast(`${t("dp.connected")} ✓`, "ok"); }}>
             <Cloud size={15} /> {t("dp.saveConnect")}
           </Btn>
           <button onClick={() => { setStep(1); migStarted.current = false; setMigStep(-1); }} className="tap w-full text-center font-mono text-[11px] text-faint hover:text-mut">← {t("c.back")}</button>
