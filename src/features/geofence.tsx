@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { MapPin, X, Save, Crosshair } from "lucide-react";
+import { MapPin, Save, Crosshair } from "lucide-react";
 import { getDB, updateSettings } from "../lib/store";
 import { useT } from "../lib/i18n";
-import { Sheet, Btn } from "../components/ui";
+import { locateWithFallback } from "../lib/util";
+import { Sheet, Btn, toast } from "../components/ui";
 
 export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () => void }) {
   const db = getDB();
@@ -10,6 +11,7 @@ export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () =
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<"center" | "radius">("center");
   const [temp, setTemp] = useState<{ lat: number; lng: number; radius: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   if (!db) return null;
   const s = db.settings;
@@ -59,6 +61,19 @@ export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () =
     }
   };
 
+  const useCurrentLocation = async () => {
+    if (!temp) return;
+    setLocating(true);
+    const position = await locateWithFallback({ lat: temp.lat, lng: temp.lng }, 8000);
+    setLocating(false);
+    if (position.simulated) {
+      toast("GPS unavailable. Allow location access and use HTTPS to detect this device.", "err");
+      return;
+    }
+    setTemp((current) => current ? { ...current, lat: position.lat, lng: position.lng } : current);
+    toast("Current GPS coordinates captured. Save to apply them.", "ok");
+  };
+
   const handleReset = () => {
     setTemp({ lat: s.lat, lng: s.lng, radius: s.radius });
   };
@@ -87,6 +102,7 @@ export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () =
           </div>
           <div className="flex gap-2">
             <Btn variant="ghost" onClick={handleReset}><Crosshair size={14} /> {t("c.cancel")}</Btn>
+            <Btn variant="ghost" onClick={useCurrentLocation} busy={locating}><MapPin size={14} /> {locating ? "Locating..." : "Use my GPS"}</Btn>
             <Btn variant="primary" onClick={handleSave}><Save size={14} /> {t("c.save")}</Btn>
           </div>
         </div>
