@@ -12,7 +12,7 @@ const REMEMBER_KEY = "shiftgate.remember";
 const VERSION = 5;
 
 const defaultSettings: Settings = {
-  appName: "ShiftGate", company: "PT Nusa Logistik", siteName: "WH-01 · Jakarta",
+  appName: "ShiftGate", company: "", siteName: "",
   lat: -6.1754, lng: 106.8272, radius: 100, lateTime: "08:15", theme: "dark", hue: 38,
   pointsExpiryMonths: 12, otRate: 25000, language: "en",
   supabase: { url: "", key: "", status: "off" },
