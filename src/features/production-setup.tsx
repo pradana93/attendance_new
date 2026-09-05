@@ -19,6 +19,7 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPassword2, setAdminPassword2] = useState("");
   const [creating, setCreating] = useState(false);
+  const hasBuildConfiguration = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
   const test = async () => {
     setTesting(true);
@@ -69,6 +70,9 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
       </div>
 
       <section className="card space-y-4 p-5">
+        {!hasBuildConfiguration && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[11.5px] leading-relaxed text-mut">
+          This deployment has no shared Supabase configuration. Values entered here apply only to this browser. Add <span className="font-mono text-ink">VITE_SUPABASE_URL</span> and <span className="font-mono text-ink">VITE_SUPABASE_ANON_KEY</span> to Vercel, then redeploy so phones and other devices use the same project.
+        </p>}
         <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-faint"><Link2 size={13} className="text-cool" /> 01 · project connection</div>
         <Field label="Project URL"><input className="inp font-mono" value={url} onChange={(e) => { setUrl(e.target.value); setSchemaReady(false); }} placeholder="https://your-project.supabase.co" /></Field>
         <Field label="Public anon key"><input className="inp font-mono" type="password" value={key} onChange={(e) => { setKey(e.target.value); setSchemaReady(false); }} placeholder="eyJhbGciOiJIUzI1NiIs…" /></Field>

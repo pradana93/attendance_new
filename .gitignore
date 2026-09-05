@@ -2,4 +2,9 @@
 # Build artifacts
 dist/
 build/
+
+# Local deployment credentials
+.env
+.env.*
+!.env.example
 ```

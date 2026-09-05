@@ -14,7 +14,16 @@ npm run dev        # local development
 npm run build      # production build → dist/
 ```
 
-Open the app, complete the **first-run setup wizard**, then sign in.
+For a shared deployment, copy `.env.example` to `.env` locally or add the same variables to your hosting provider before building:
+
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+On Vercel, add them under **Project Settings → Environment Variables** for the relevant environments, then redeploy. These are public browser configuration values; never use a Supabase service-role key here. Entering them only in the setup form configures one browser session and will not configure other devices.
+
+Open the app, complete the **first-run setup wizard** once, then sign in from any device.
 
 The first-run wizard creates an empty workspace and the administrator account entered during setup. No demo accounts or seeded attendance history are created.
 
