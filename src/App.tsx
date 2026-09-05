@@ -15,7 +15,7 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, signOut, workspaceSettings } from "./lib/production";
+import { currentProductionUser, markNotificationRead, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
 import { hasProductionConfiguration } from "./lib/production";
 
 initStore();
@@ -58,6 +58,11 @@ export default function App() {
       setCur(next);
     }).finally(() => setAuthChecking(false));
   }, [cloudReady]);
+
+  useEffect(() => {
+    if (!cur) return;
+    return subscribeWorkspaceChanges(() => { void refreshProductionData(); });
+  }, [cur?.id]);
 
   if (booting) return <Splash />;
   if (!db) return null;
@@ -225,7 +230,7 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
           {!online && (
             <Chip tone="amber" className="shrink-0"><WifiOff size={11} /> {t("h.offline")}</Chip>
           )}
-          <button onClick={() => { setBellOpen(true); markNotisRead(user.id); }}
+          <button onClick={() => { setBellOpen(true); markNotisRead(user.id); db.notifications.filter((n) => n.userId === "*" || n.userId === user.id).forEach((n) => { void markNotificationRead(n.id); }); void refreshProductionData(); }}
             className="tap relative rounded-[10px] border border-line bg-panel2 p-2 text-mut hover:text-ink" aria-label={t("c.notifications")}>
             <Bell size={16} />
             {unread > 0 && (

@@ -20,6 +20,7 @@ import { testSupabaseConnection, initSupabase } from "../lib/supabase";
 import { createStaffAccount, workspaceProfiles } from "../lib/production";
 import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
+import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -225,8 +226,8 @@ function LiveBoard() {
                 </div>
                 {r.selfReport && (
                   <div className="mt-2.5 flex gap-2 border-t border-line2 pt-2.5">
-                    <Btn variant="ok" className="flex-1 !py-2 text-[12.5px]" onClick={() => { reviewSelfReport(r.id, true); toast(`Approved ${u.name}`); }}><Check size={14} /> ✓</Btn>
-                    <Btn variant="danger" className="flex-1 !py-2 text-[12.5px]" onClick={() => { reviewSelfReport(r.id, false); toast("Rejected", "info"); }}><X size={14} /> ✕</Btn>
+                    <Btn variant="ok" className="flex-1 !py-2 text-[12.5px]" onClick={async () => { try { await reviewSelfReportRemote(r.id, true); await refreshProductionData(); toast(`Approved ${u.name}`); } catch (error) { toast(error instanceof Error ? error.message : "Could not approve report", "err"); } }}><Check size={14} /> ✓</Btn>
+                    <Btn variant="danger" className="flex-1 !py-2 text-[12.5px]" onClick={async () => { try { await reviewSelfReportRemote(r.id, false); await refreshProductionData(); toast("Rejected", "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not reject report", "err"); } }}><X size={14} /> ✕</Btn>
                   </div>
                 )}
               </div>
@@ -256,11 +257,10 @@ function LiveBoard() {
             <Field label={t("a.checkInT")}><input className="inp font-mono" type="time" value={mIn} onChange={(e) => setMIn(e.target.value)} /></Field>
             <Field label={t("a.checkOutT")}><input className="inp font-mono" type="time" value={mOut} onChange={(e) => setMOut(e.target.value)} /></Field>
           </div>
-          <Btn className="w-full" onClick={() => {
+          <Btn className="w-full" onClick={async () => {
             if (!mUser) { toast("Pick an employee first", "err"); return; }
-            manualLog(mUser, mDate, mIn, mOut || undefined);
-            toast(`Saved for ${userName(mUser)}`);
-            setShowManual(false);
+            try { await manualAttendanceRemote({ userId: mUser, date: mDate, checkIn: mIn, checkOut: mOut || undefined, late: mIn > db.settings.lateTime }); await refreshProductionData(); toast(`Saved for ${userName(mUser)}`); setShowManual(false); }
+            catch (error) { toast(error instanceof Error ? error.message : "Could not save attendance", "err"); }
           }}>{t("a.saveRecord")}</Btn>
           <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">{t("a.audit")}</p>
         </div>
@@ -322,7 +322,7 @@ function StaffPanel({ admin }: { admin: User }) {
               {u.faceEnrolled
                 ? <Chip tone="ok"><ScanFace size={10} /> {t("a.face")}</Chip>
                 : u.role === "staff" && (
-                  <button onClick={() => { enrollFace(u.id); toast(`Face enrolled: ${u.name}`); }}
+                  <button onClick={async () => { try { await enrollFaceRemote(u.id); await refreshProductionData(); setProfiles(await workspaceProfiles()); toast(`Face enrolled: ${u.name}`); } catch (error) { toast(error instanceof Error ? error.message : "Could not enroll face", "err"); } }}
                     className="tap rounded-lg border border-amber/40 bg-amber/10 px-2 py-1.5 font-mono text-[10px] uppercase text-amber">{t("a.enroll")}</button>
                 )}
               <button onClick={() => setEditUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-amber/50 hover:text-amber" aria-label={t("a.editUser")}>

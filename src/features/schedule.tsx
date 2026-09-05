@@ -13,7 +13,7 @@ import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, vibrate } from 
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
-import { addRewardItemRemote, completePiketRemote, deleteTaskRemote, redeemRewardRemote, rotateTemplateRemote, saveTaskRemote, setAssignmentRemote } from "../lib/production";
+import { addRewardItemRemote, completePiketRemote, createSwapRequest, decideSwapRequest, deleteTaskRemote, redeemRewardRemote, rotateTemplateRemote, saveTaskRemote, setAssignmentRemote } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 
 const AREAS = ["Depan", "Tengah", "Belakang", "Gudang", "Umum"];
@@ -175,7 +175,7 @@ function Roster({ user }: { user: User }) {
       {/* ---------- admin week view ---------- */}
       {isAdmin && adminView === "week" && (
         <>
-          <SwapQueue />
+          <SwapQueue admin={user} />
           <DayChips sel={selDay} setSel={setSelDay} labels={dayLabels} monday={monday} />
           <div className="space-y-2">
             {rows.length === 0 && <Empty icon={<ClipboardList size={26} />} title={t("p.unassigned")} sub={`${t("p.template")} →`} />}
@@ -321,10 +321,9 @@ function SwapSheet({ swapFor, me, onClose }: { swapFor: { task: PiketTask; date:
         <Field label={t("o.reason")}>
           <textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ada urusan keluarga…" />
         </Field>
-        <Btn className="w-full" disabled={!target || !reason.trim()} onClick={() => {
-          const res = requestSwap(me.id, target, swapFor.date, swapFor.task.id, reason.trim());
-          toast(res.msg, res.ok ? "ok" : "err");
-          if (res.ok) onClose();
+        <Btn className="w-full" disabled={!target || !reason.trim()} onClick={async () => {
+          try { await createSwapRequest({ fromUserId: me.id, toUserId: target, date: swapFor.date, taskId: swapFor.task.id, reason: reason.trim() }); await refreshProductionData(); toast(t("sw.send"), "ok"); onClose(); }
+          catch (error) { toast(error instanceof Error ? error.message : "Could not request swap", "err"); }
         }}><ArrowLeftRight size={15} /> {t("sw.send")}</Btn>
 
         {myPending.length > 0 && (
@@ -349,7 +348,7 @@ function SwapSheet({ swapFor, me, onClose }: { swapFor: { task: PiketTask; date:
 }
 
 /* ---------------- pending swap approvals (admin) ---------------- */
-function SwapQueue() {
+function SwapQueue({ admin }: { admin: User }) {
   const db = getDB();
   const t = useT();
   if (!db) return null;
@@ -373,11 +372,11 @@ function SwapQueue() {
               </div>
               <p className="mt-0.5 font-mono text-[10.5px] text-faint">{tk?.name} · “{s.reason}”</p>
               <div className="mt-2 flex gap-2">
-                <button onClick={() => { decideSwap(s.id, true, "admin"); toast(t("sw.approve") + " ✓", "ok"); }}
+                <button onClick={async () => { try { await decideSwapRequest(s.id, true, admin.id); await refreshProductionData(); toast(t("sw.approve") + " ✓", "ok"); } catch (error) { toast(error instanceof Error ? error.message : "Could not approve swap", "err"); } }}
                   className="tap flex flex-1 items-center justify-center gap-1 rounded-lg border border-ok/40 bg-ok/10 py-1.5 font-mono text-[11px] uppercase text-ok hover:bg-ok/20">
                   <Check size={12} /> {t("o.approve")}
                 </button>
-                <button onClick={() => { decideSwap(s.id, false, "admin"); toast(t("sw.reject"), "info"); }}
+                <button onClick={async () => { try { await decideSwapRequest(s.id, false, admin.id); await refreshProductionData(); toast(t("sw.reject"), "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not reject swap", "err"); } }}
                   className="tap flex flex-1 items-center justify-center gap-1 rounded-lg border border-bad/40 bg-bad/10 py-1.5 font-mono text-[11px] uppercase text-bad hover:bg-bad/20">
                   <X size={12} /> {t("o.reject")}
                 </button>

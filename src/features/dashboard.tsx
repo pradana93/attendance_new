@@ -6,7 +6,8 @@ import {
   QrCode, ScanFace, Search, Send, Star, Sun, Thermometer, Timer, User as UserIcon, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
-import { completePiket, getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName } from "../lib/store";
+import { getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName, refreshProductionData } from "../lib/store";
+import { completePiketRemote } from "../lib/production";
 import { punchAttendance, todayAttendance } from "../lib/production";
 import { copyText, fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, relTime, todayKey, vibrate, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
@@ -93,12 +94,13 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
     return () => { active = false; };
   }, [user.id]);
 
-  const finishTask = (task: PiketTask, photo?: string) => {
-    const res = completePiket(todayKey(), task.id, user.id, photo);
-    if (res.ok) {
-      toast(`${task.name} · ${res.msg}`, "ok");
+  const finishTask = async (task: PiketTask, photo?: string) => {
+    try {
+      await completePiketRemote(task.id, todayKey(), photo);
+      await refreshProductionData();
+      toast(`${task.name} · completed`, "ok");
       confetti({ particleCount: 46, spread: 62, origin: { y: 0.72 }, colors: ["#ffb224", "#3ed598"], disableForReducedMotion: true });
-    } else toast(res.msg, "err");
+    } catch (error) { toast(error instanceof Error ? error.message : "Could not complete task", "err"); }
   };
 
   return (

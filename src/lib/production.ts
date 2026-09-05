@@ -1,6 +1,6 @@
 import type { SupabaseClient, User as SupabaseUser } from "@supabase/supabase-js";
 import { getSupabase, initSupabase } from "./supabase";
-import type { Announcement, Attendance, Feedback, Leave, Overtime, PiketAssignment, PiketLog, PiketTask, PointEvent, RedeemItem, Redemption, Role, Settings, User } from "../types";
+import type { Announcement, Attendance, Feedback, Leave, Overtime, PiketAssignment, PiketLog, PiketTask, PointEvent, RedeemItem, Redemption, Role, Settings, SwapOverride, SwapRequest, User } from "../types";
 import type { DB } from "../types";
 
 interface ProfileRow {
@@ -15,6 +15,7 @@ interface ProfileRow {
   active: boolean;
   points: number;
   notification_approval: boolean;
+  face_enrolled?: boolean;
   created_at: string;
 }
 
@@ -205,7 +206,7 @@ export async function loadWorkspaceData(): Promise<Partial<DB>> {
   if (!client) return {};
   const workspaceId = await currentWorkspaceId(client);
   if (!workspaceId) return {};
-  const [profiles, attendance, overtime, leaves, announcements, feedback, tasks, assignments, logs, points, items, redemptions] = await Promise.all([
+  const [profiles, attendance, overtime, leaves, announcements, feedback, tasks, assignments, logs, points, items, redemptions, notifications, swaps, overrides] = await Promise.all([
     client.from("profiles").select("*").order("created_at", { ascending: true }),
     client.from("attendance").select("*").order("attendance_date", { ascending: false }),
     client.from("overtime_requests").select("*").order("created_at", { ascending: false }),
@@ -218,8 +219,11 @@ export async function loadWorkspaceData(): Promise<Partial<DB>> {
     client.from("point_events").select("*"),
     client.from("reward_items").select("*").eq("active", true),
     client.from("reward_redemptions").select("*"),
+    client.from("notifications").select("*").order("created_at", { ascending: false }),
+    client.from("swap_requests").select("*").order("created_at", { ascending: false }),
+    client.from("swap_overrides").select("*"),
   ]);
-  const firstError = [profiles, attendance, overtime, leaves, announcements, feedback, tasks, assignments, logs, points, items, redemptions].find((result) => result.error)?.error;
+  const firstError = [profiles, attendance, overtime, leaves, announcements, feedback, tasks, assignments, logs, points, items, redemptions, notifications, swaps, overrides].find((result) => result.error)?.error;
   if (firstError) throw new Error(firstError.message);
   return {
     users: (profiles.data ?? []).map((row) => mapProfile(row as ProfileRow)),
@@ -234,13 +238,60 @@ export async function loadWorkspaceData(): Promise<Partial<DB>> {
     pointEvents: (points.data ?? []).map(mapPointEvent),
     items: (items.data ?? []).map(mapRewardItem),
     redemptions: (redemptions.data ?? []).map(mapRedemption),
+    notifications: (notifications.data ?? []).map(mapNotification),
+    swapRequests: (swaps.data ?? []).map(mapSwapRequest),
+    swapOverrides: (overrides.data ?? []).map(mapSwapOverride),
   };
+}
+
+export async function createSwapRequest(input: { fromUserId: string; toUserId: string; date: string; taskId: string; reason: string }): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const workspaceId = await currentWorkspaceId(client);
+  if (!workspaceId) throw new Error("Your workspace profile could not be found.");
+  const { error } = await client.from("swap_requests").insert({ workspace_id: workspaceId, from_user_id: input.fromUserId, to_user_id: input.toUserId, work_date: input.date, task_id: input.taskId, reason: input.reason });
+  if (error) throw new Error(error.message);
+}
+
+export async function decideSwapRequest(id: string, approve: boolean, deciderId: string): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("swap_requests").update({ status: approve ? "approved" : "rejected", decided_by: deciderId }).eq("id", id);
+  if (error) throw new Error(error.message);
+  if (approve) {
+    const { data: request } = await client.from("swap_requests").select("workspace_id, work_date, task_id, to_user_id").eq("id", id).single();
+    if (request) {
+      const { error: overrideError } = await client.from("swap_overrides").upsert({ workspace_id: request.workspace_id, work_date: request.work_date, task_id: request.task_id, user_id: request.to_user_id }, { onConflict: "workspace_id,work_date,task_id" });
+      if (overrideError) throw new Error(overrideError.message);
+    }
+  }
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const client = productionClient();
+  if (!client) return;
+  const { error } = await client.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export function subscribeWorkspaceChanges(onChange: () => void): () => void {
+  const client = productionClient();
+  if (!client) return () => undefined;
+  const channel = client.channel("workspace-live-sync");
+  ["profiles", "attendance", "overtime_requests", "leave_requests", "announcements", "feedback", "piket_logs", "point_events", "notifications"].forEach((table) => {
+    channel.on("postgres_changes", { event: "*", schema: "public", table }, onChange);
+  });
+  channel.subscribe();
+  return () => { void client.removeChannel(channel); };
 }
 
 export async function completePiketRemote(taskId: string, date: string, proof?: string): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");
-  const { error } = await client.rpc("complete_piket", { p_task_id: taskId, p_work_date: date, p_proof_url: proof ?? null });
+  const workspaceId = await currentWorkspaceId(client);
+  const { data: auth } = await client.auth.getUser();
+  const proofUrl = workspaceId && auth.user ? await uploadEvidence(client, workspaceId, auth.user.id, proof, "piket") : null;
+  const { error } = await client.rpc("complete_piket", { p_task_id: taskId, p_work_date: date, p_proof_url: proofUrl });
   if (error) throw new Error(error.message);
 }
 
@@ -314,7 +365,8 @@ export async function createOvertimeRequest(input: { userId: string; date: strin
   if (!client) throw new Error("Supabase is not configured for this deployment.");
   const workspaceId = await currentWorkspaceId(client);
   if (!workspaceId) throw new Error("Your workspace profile could not be found.");
-  const { error } = await client.from("overtime_requests").insert({ workspace_id: workspaceId, user_id: input.userId, request_date: input.date, start_time: input.start, end_time: input.end, reason: input.reason, photo_url: input.photo ?? null });
+  const photoUrl = await uploadEvidence(client, workspaceId, input.userId, input.photo, "overtime");
+  const { error } = await client.from("overtime_requests").insert({ workspace_id: workspaceId, user_id: input.userId, request_date: input.date, start_time: input.start, end_time: input.end, reason: input.reason, photo_url: photoUrl });
   if (error) throw new Error(error.message);
 }
 
@@ -346,7 +398,8 @@ export async function createFeedback(input: { userId: string; type: Feedback["ty
   if (!client) throw new Error("Supabase is not configured for this deployment.");
   const workspaceId = await currentWorkspaceId(client);
   if (!workspaceId) throw new Error("Your workspace profile could not be found.");
-  const { error } = await client.from("feedback").insert({ workspace_id: workspaceId, user_id: input.userId, type: input.type, priority: input.priority, title: input.title, description: input.description, screenshot_url: input.screenshot ?? null });
+  const screenshotUrl = await uploadEvidence(client, workspaceId, input.userId, input.screenshot, "feedback");
+  const { error } = await client.from("feedback").insert({ workspace_id: workspaceId, user_id: input.userId, type: input.type, priority: input.priority, title: input.title, description: input.description, screenshot_url: screenshotUrl });
   if (error) throw new Error(error.message);
 }
 
@@ -391,6 +444,41 @@ export async function setProfileActiveRemote(id: string, active: boolean): Promi
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");
   const { error } = await client.from("profiles").update({ active }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function setNotificationPreferenceRemote(id: string, enabled: boolean): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("profiles").update({ notification_approval: enabled }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function enrollFaceRemote(id: string): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("profiles").update({ face_enrolled: true }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function manualAttendanceRemote(input: { userId: string; date: string; checkIn: string; checkOut?: string; late: boolean }): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const workspaceId = await currentWorkspaceId(client);
+  if (!workspaceId) throw new Error("Your workspace profile could not be found.");
+  const checkIn = new Date(`${input.date}T${input.checkIn}:00`).toISOString();
+  const checkOut = input.checkOut ? new Date(`${input.date}T${input.checkOut}:00`).toISOString() : null;
+  const { error } = await client.from("attendance").upsert({ workspace_id: workspaceId, user_id: input.userId, attendance_date: input.date, check_in: checkIn, check_out: checkOut, late: input.late, method: "manual" }, { onConflict: "workspace_id,user_id,attendance_date" });
+  if (error) throw new Error(error.message);
+}
+
+export async function reviewSelfReportRemote(id: string, approve: boolean): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const query = approve
+    ? client.from("attendance").update({ self_report: false }).eq("id", id)
+    : client.from("attendance").delete().eq("id", id);
+  const { error } = await query;
   if (error) throw new Error(error.message);
 }
 
@@ -465,7 +553,7 @@ function mapProfile(row: ProfileRow): User {
     department: row.department,
     avatarHue: 38,
     photo: row.avatar_url ?? undefined,
-    faceEnrolled: false,
+    faceEnrolled: Boolean(row.face_enrolled),
     points: row.points,
     active: row.active,
     createdAt: row.created_at,
@@ -540,4 +628,28 @@ function mapRewardItem(row: Record<string, unknown>): RedeemItem {
 
 function mapRedemption(row: Record<string, unknown>): Redemption {
   return { id: String(row.id), userId: String(row.user_id), itemId: String(row.item_id), date: String(row.redeemed_date), cost: Number(row.cost) };
+}
+
+function mapNotification(row: Record<string, unknown>) {
+  return { id: String(row.id), userId: row.user_id ? String(row.user_id) : "*", title: String(row.title), body: String(row.body), date: String(row.created_at), readBy: row.read_at ? [String(row.user_id ?? "")] : [] };
+}
+
+function mapSwapRequest(row: Record<string, unknown>): SwapRequest {
+  return { id: String(row.id), date: String(row.work_date), taskId: String(row.task_id), fromUserId: String(row.from_user_id), toUserId: String(row.to_user_id), reason: String(row.reason), status: row.status as SwapRequest["status"], createdAt: String(row.created_at), decidedBy: row.decided_by ? String(row.decided_by) : undefined };
+}
+
+function mapSwapOverride(row: Record<string, unknown>): SwapOverride {
+  return { id: String(row.id), date: String(row.work_date), taskId: String(row.task_id), userId: String(row.user_id) };
+}
+
+async function uploadEvidence(client: SupabaseClient, workspaceId: string, userId: string, dataUrl: string | undefined, kind: string): Promise<string | null> {
+  if (!dataUrl) return null;
+  if (!dataUrl.startsWith("data:")) return dataUrl;
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const path = `${workspaceId}/${userId}/${kind}-${crypto.randomUUID()}.jpg`;
+  const { error } = await client.storage.from("evidence").upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: false });
+  if (error) throw new Error(`Evidence upload failed: ${error.message}`);
+  const { data } = client.storage.from("evidence").getPublicUrl(path);
+  return data.publicUrl;
 }

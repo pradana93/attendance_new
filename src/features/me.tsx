@@ -4,8 +4,7 @@ import {
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
-import { signOut } from "../lib/production";
-import { createLeaveRequest } from "../lib/production";
+import { createLeaveRequest, setNotificationPreferenceRemote, signOut } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
@@ -188,7 +187,7 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
             <Bell size={15} className="text-amber" />
             <p className="text-[13px] font-semibold text-ink">{t("m.notifyApproval")}</p>
           </div>
-          <Toggle on={user.notifApproval} onChange={(v) => { setNotifPref(user.id, v); toast(v ? "Notifications on" : "Notifications muted", "info"); }} />
+          <Toggle on={user.notifApproval} onChange={async (v) => { try { await setNotificationPreferenceRemote(user.id, v); await refreshProductionData(); toast(v ? "Notifications on" : "Notifications muted", "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not update notifications", "err"); } }} />
         </div>
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
