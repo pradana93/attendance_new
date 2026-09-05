@@ -82,16 +82,16 @@ function svgPhoto(label: string, date: string): string {
 
 function seed(): DB {
   const users: User[] = [
-    mkUser("u-admin", "Budi Santoso", "budi@nusalogistik.id", "superadmin", "WMS-001", "Operations", 210),
-    mkUser("u-2", "Rina Wijaya", "rina@nusalogistik.id", "admin", "WMS-002", "Operations", 330),
-    mkUser("u-3", "Agus Prasetyo", "agus@nusalogistik.id", "staff", "WMS-003", "Inbound", 22),
-    mkUser("u-4", "Dewi Lestari", "dewi@nusalogistik.id", "staff", "WMS-004", "Outbound", 152),
-    mkUser("u-5", "Joko Susilo", "joko@nusalogistik.id", "staff", "WMS-005", "Inventory", 262),
-    mkUser("u-6", "Siti Rahma", "siti@nusalogistik.id", "staff", "WMS-006", "Packing", 42),
-    mkUser("u-7", "Andi Saputra", "andi@nusalogistik.id", "staff", "WMS-007", "Inbound", 192),
-    mkUser("u-8", "Maya Putri", "maya@nusalogistik.id", "staff", "WMS-008", "QA", 302),
-    mkUser("u-9", "Fajar Hidayat", "fajar@nusalogistik.id", "staff", "WMS-009", "Forklift", 122, "shift123", false),
-    mkUser("u-10", "Lina Marlina", "lina@nusalogistik.id", "staff", "WMS-010", "Outbound", 2, "shift123", false),
+    mkUser("u-admin", "Budi Santoso", "budi@company.com", "superadmin", "WMS-001", "Operations", 210),
+    mkUser("u-2", "Rina Wijaya", "rina@company.com", "admin", "WMS-002", "Operations", 330),
+    mkUser("u-3", "Agus Prasetyo", "agus@company.com", "staff", "WMS-003", "Inbound", 22),
+    mkUser("u-4", "Dewi Lestari", "dewi@company.com", "staff", "WMS-004", "Outbound", 152),
+    mkUser("u-5", "Joko Susilo", "joko@company.com", "staff", "WMS-005", "Inventory", 262),
+    mkUser("u-6", "Siti Rahma", "siti@company.com", "staff", "WMS-006", "Packing", 42),
+    mkUser("u-7", "Andi Saputra", "andi@company.com", "staff", "WMS-007", "Inbound", 192),
+    mkUser("u-8", "Maya Putri", "maya@company.com", "staff", "WMS-008", "QA", 302),
+    mkUser("u-9", "Fajar Hidayat", "fajar@company.com", "staff", "WMS-009", "Forklift", 122, "shift123", false),
+    mkUser("u-10", "Lina Marlina", "lina@company.com", "staff", "WMS-010", "Outbound", 2, "shift123", false),
   ];
   users[8].active = false;
 
