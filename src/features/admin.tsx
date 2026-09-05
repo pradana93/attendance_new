@@ -550,7 +550,7 @@ function NoticePanel({ admin }: { admin: User }) {
 
 /* ---------------- supabase deploy ---------------- */
 const MIGRATIONS = [
-  "verify project credentials …", "check public.settings …", "initialize Supabase client …",
+  "verify project credentials …", "check workspace schema …", "initialize Supabase client …",
 ];
 
 function CloudPanel() {
@@ -636,10 +636,10 @@ function CloudPanel() {
           </button>
           {showSql && (
             <div className="a-fadein mt-2">
-              <p className="mb-2 font-mono text-[11px] text-faint">Execute this SQL in your Supabase Dashboard &gt; SQL Editor to create tables:</p>
-              <pre className="no-scrollbar max-h-56 overflow-auto rounded-xl border border-line bg-[#0b0e12] p-3 font-mono text-[10.5px] leading-relaxed text-[#9fb3c8]">-- Tables: users, attendance, picket_logs, point_events, overtime_requests, settings, announcements, feedback\n-- RLS policies enabled for all tables\n-- See src/lib/supabase.ts for full migration script</pre>
+              <p className="mb-2 font-mono text-[11px] text-faint">Schema is managed through the Supabase migrations in this repository:</p>
+              <pre className="no-scrollbar max-h-56 overflow-auto rounded-xl border border-line bg-[#0b0e12] p-3 font-mono text-[10.5px] leading-relaxed text-[#9fb3c8]">001_production_foundation.sql\n002_feature_domains.sql\n003_workspace_settings_write.sql</pre>
               <Btn variant="ghost" className="mt-2 w-full" onClick={async () => { 
-                const sql = `-- Full migration SQL available in src/lib/supabase.ts\n-- Copy from there and paste into Supabase SQL Editor`;
+                const sql = "Run `npx supabase db push` from the project root to apply the checked-in migrations.";
                 navigator.clipboard?.writeText(sql).catch(() => {}); 
                 toast("SQL instructions copied"); 
               }}><Copy size={13} /> {t("dp.copy")}</Btn>
@@ -730,7 +730,7 @@ function CloudPanel() {
               toast(result.error || "Connection failed", "err");
             }
           }}><Activity size={14} /> {testing ? t("dp.testing") : t("dp.test")}</Btn>
-          {!schemaReady && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[11.5px] leading-relaxed text-mut">The project is reachable, but <span className="font-mono text-ink">public.settings</span> is missing. Run the schema SQL in Supabase SQL Editor, then test again.</p>}
+          {!schemaReady && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[11.5px] leading-relaxed text-mut">The project is reachable, but the production workspace schema is not ready. Apply the checked-in migrations, then test again.</p>}
           <Btn className="w-full" disabled={!schemaReady} onClick={() => { connectSupabase(url.trim(), key.trim()); toast(`${t("dp.connected")} ✓`, "ok"); }}>
             <Cloud size={15} /> {t("dp.saveConnect")}
           </Btn>

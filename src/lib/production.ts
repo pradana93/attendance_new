@@ -1,6 +1,6 @@
 import type { SupabaseClient, User as SupabaseUser } from "@supabase/supabase-js";
 import { getSupabase, initSupabase } from "./supabase";
-import type { Attendance, Role, User } from "../types";
+import type { Attendance, Role, Settings, User } from "../types";
 
 interface ProfileRow {
   id: string;
@@ -133,6 +133,70 @@ export async function workspaceProfiles(): Promise<User[]> {
   const { data, error } = await client.from("profiles").select("*").order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return (data as ProfileRow[]).map(mapProfile);
+}
+
+async function currentWorkspaceId(client: SupabaseClient): Promise<string | null> {
+  const { data: auth } = await client.auth.getUser();
+  if (!auth.user) return null;
+  const { data } = await client.from("profiles").select("workspace_id").eq("id", auth.user.id).maybeSingle();
+  return (data?.workspace_id as string | undefined) ?? null;
+}
+
+export async function workspaceSettings(): Promise<Partial<Settings> | null> {
+  const client = productionClient();
+  if (!client) return null;
+  const workspaceId = await currentWorkspaceId(client);
+  if (!workspaceId) return null;
+  const [{ data: workspace }, { data: preferences }] = await Promise.all([
+    client.from("workspaces").select("name, company, site_name, logo_url, hue, latitude, longitude, geofence_radius, late_time").eq("id", workspaceId).maybeSingle(),
+    client.from("workspace_settings").select("language, theme, points_expiry_months, overtime_rate").eq("workspace_id", workspaceId).maybeSingle(),
+  ]);
+  if (!workspace) return null;
+  return {
+    appName: workspace.name,
+    company: workspace.company,
+    siteName: workspace.site_name,
+    logo: workspace.logo_url ?? undefined,
+    hue: workspace.hue,
+    lat: workspace.latitude,
+    lng: workspace.longitude,
+    radius: workspace.geofence_radius,
+    lateTime: workspace.late_time?.slice(0, 5) ?? undefined,
+    language: preferences?.language,
+    theme: preferences?.theme,
+    pointsExpiryMonths: preferences?.points_expiry_months,
+    otRate: preferences?.overtime_rate,
+  };
+}
+
+export async function saveWorkspaceSettings(patch: Partial<Settings>): Promise<void> {
+  const client = productionClient();
+  if (!client) return;
+  const workspaceId = await currentWorkspaceId(client);
+  if (!workspaceId) return;
+  const workspacePatch: Record<string, unknown> = {};
+  if (patch.appName !== undefined) workspacePatch.name = patch.appName;
+  if (patch.company !== undefined) workspacePatch.company = patch.company;
+  if (patch.siteName !== undefined) workspacePatch.site_name = patch.siteName;
+  if (patch.logo !== undefined) workspacePatch.logo_url = patch.logo || null;
+  if (patch.hue !== undefined) workspacePatch.hue = patch.hue;
+  if (patch.lat !== undefined) workspacePatch.latitude = patch.lat;
+  if (patch.lng !== undefined) workspacePatch.longitude = patch.lng;
+  if (patch.radius !== undefined) workspacePatch.geofence_radius = patch.radius;
+  if (patch.lateTime !== undefined) workspacePatch.late_time = patch.lateTime;
+  if (Object.keys(workspacePatch).length) {
+    const { error } = await client.from("workspaces").update(workspacePatch).eq("id", workspaceId);
+    if (error) throw new Error(error.message);
+  }
+  const preferencePatch: Record<string, unknown> = {};
+  if (patch.language !== undefined) preferencePatch.language = patch.language;
+  if (patch.theme !== undefined) preferencePatch.theme = patch.theme;
+  if (patch.pointsExpiryMonths !== undefined) preferencePatch.points_expiry_months = patch.pointsExpiryMonths;
+  if (patch.otRate !== undefined) preferencePatch.overtime_rate = patch.otRate;
+  if (Object.keys(preferencePatch).length) {
+    const { error } = await client.from("workspace_settings").update(preferencePatch).eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function currentProductionUser(): Promise<User | null> {

@@ -4,6 +4,7 @@ import type {
   PointEvent, Redemption, RedeemItem, Role, Settings, SwapRequest, User,
 } from "../types";
 import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
+import { saveWorkspaceSettings } from "./production";
 
 const DB_KEY = "shiftgate.db.v3";
 const SESSION_KEY = "shiftgate.session";
@@ -699,6 +700,7 @@ export function enrollFace(userId: string) {
 export function updateSettings(patch: Partial<Settings>) {
   if (!cache) return;
   cache.settings = { ...cache.settings, ...patch };
+  void saveWorkspaceSettings(patch).catch(() => undefined);
   persist(); emit();
 }
 

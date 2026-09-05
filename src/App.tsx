@@ -15,7 +15,7 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, signOut } from "./lib/production";
+import { currentProductionUser, signOut, workspaceSettings } from "./lib/production";
 import { hasProductionConfiguration } from "./lib/production";
 
 initStore();
@@ -49,7 +49,13 @@ export default function App() {
   useEffect(() => {
     if (!cloudReady) { setAuthChecking(false); return; }
     setAuthChecking(true);
-    currentProductionUser().then(setCur).finally(() => setAuthChecking(false));
+    currentProductionUser().then(async (next) => {
+      if (next) {
+        const remoteSettings = await workspaceSettings();
+        if (remoteSettings) updateSettings(remoteSettings);
+      }
+      setCur(next);
+    }).finally(() => setAuthChecking(false));
   }, [cloudReady]);
 
   if (booting) return <Splash />;
