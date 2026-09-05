@@ -170,7 +170,20 @@ export async function punchAttendance(args: {
   if (!client) throw new Error("Supabase is not configured for this deployment.");
   const timestamp = new Date().toISOString();
   const existing = await todayAttendance(args.userId, args.date);
+  let workspaceId: string | undefined;
+  if (!existing) {
+    const { data: profile, error: profileError } = await client
+      .from("profiles")
+      .select("workspace_id")
+      .eq("id", args.userId)
+      .maybeSingle();
+    if (profileError || !profile?.workspace_id) {
+      throw new Error(profileError?.message ?? "Your workspace profile could not be found.");
+    }
+    workspaceId = profile.workspace_id as string;
+  }
   const row = {
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     user_id: args.userId,
     attendance_date: args.date,
     ...(args.kind === "in" ? { check_in: timestamp, late: args.late, in_score: args.score ?? null, distance_m: args.distance ?? null, method: args.method } : { check_out: timestamp, early: args.early, out_score: args.score ?? null }),
