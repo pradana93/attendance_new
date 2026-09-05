@@ -12,11 +12,11 @@ export default function SetupWizard() {
   const [dir, setDir] = useState(1);
   // workspace
   const [appName, setAppName] = useState("ShiftGate");
-  const [company, setCompany] = useState("PT Nusa Logistik");
+  const [company, setCompany] = useState("");
   const [hue, setHue] = useState(38);
   const [logo, setLogo] = useState<string | undefined>();
   // site
-  const [siteName, setSiteName] = useState("DC-01 · Cilincing");
+  const [siteName, setSiteName] = useState("DC-01 · Jakarta");
   const [lat, setLat] = useState(-6.1053);
   const [lng, setLng] = useState(106.9372);
   const [radius, setRadius] = useState(120);
@@ -123,7 +123,7 @@ export default function SetupWizard() {
               <input className="inp" value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="ShiftGate" />
             </Field>
             <Field label="Company">
-              <input className="inp" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="PT Nusa Logistik" />
+              <input className="inp" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Your company name" />
             </Field>
             <Field label="Brand color">
               <div className="flex flex-wrap gap-2.5">
