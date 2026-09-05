@@ -15,8 +15,8 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, markNotificationRead, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
-import { hasProductionConfiguration } from "./lib/production";
+import { currentProductionUser, hasProductionConfiguration, markNotificationRead, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
+import { TutorialOverlay, type TutorialTarget } from "./features/tutorial";
 
 initStore();
 
@@ -122,6 +122,8 @@ function Splash() {
 }
 
 function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => void; onChangelog: () => void }) {
+    const [tutorialOpen, setTutorialOpen] = useState(() => !user.tutorialCompleted || user.tutorialVersion !== 1);
+    const [tutorialStep, setTutorialStep] = useState(() => user.tutorialStep ?? 0);
   const db = useDB();
   const t = useT();
   const isAdmin = user.role !== "staff";
@@ -183,6 +185,18 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
     window.scrollTo({ top: 0 });
   };
   const goBack = () => window.history.back();
+    const saveTutorial = (completed: boolean, step: number) => {
+      setTutorialStep(step);
+      void saveTutorialState(user.id, { completed, version: 1, step }).catch(() => toast("Tutorial progress could not be saved", "err"));
+    };
+    const closeTutorial = (completed = false) => { setTutorialOpen(false); saveTutorial(completed, tutorialStep); };
+    const navigateTutorial = (target: TutorialTarget) => {
+      if (target === "profile") { setProfileOpen(true); return; }
+      if (target === "admin") { goAdminSec("staff"); return; }
+      if (target === "config") { goAdminSec("config"); return; }
+      goTab(target);
+    };
+    const replayTutorial = () => { setTutorialStep(0); setTutorialOpen(true); void saveTutorialState(user.id, { completed: false, version: 1, step: 0 }); };
   const canGoBack = tab !== "home" || adminSec !== "live";
 
   if (!db) return null;
@@ -302,13 +316,14 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
         </div>
       </Sheet>
 
-      <ProfileSheet user={user} open={profileOpen} onClose={() => setProfileOpen(false)} onLogout={onLogout} onChangelog={onChangelog} />
+      <ProfileSheet user={user} open={profileOpen} onClose={() => setProfileOpen(false)} onLogout={onLogout} onChangelog={onChangelog} onReplayTutorial={replayTutorial} />
+      {tutorialOpen && <TutorialOverlay user={user} step={tutorialStep} onStepChange={(step) => saveTutorial(false, step)} onClose={closeTutorial} onNavigate={navigateTutorial} />}
     </div>
   );
 }
 
 /* =============== profile sheet — logout, changelog, prefs, install =============== */
-function ProfileSheet({ user, open, onClose, onLogout, onChangelog }: { user: User; open: boolean; onClose: () => void; onLogout: () => void; onChangelog: () => void }) {
+function ProfileSheet({ user, open, onClose, onLogout, onChangelog, onReplayTutorial }: { user: User; open: boolean; onClose: () => void; onLogout: () => void; onChangelog: () => void; onReplayTutorial: () => void }) {
   const db = useDB();
   const t = useT();
   const [confirmOut, setConfirmOut] = useState(false);
@@ -387,6 +402,11 @@ function ProfileSheet({ user, open, onClose, onLogout, onChangelog }: { user: Us
               <span className="text-[13px] font-semibold text-ink">Changelog</span>
             </span>
             <Chip tone="amber">v{APP_VERSION}</Chip>
+          </button>
+
+          <button onClick={() => { onClose(); onReplayTutorial(); }} className="tap card flex w-full items-center justify-between p-3.5 text-left hover:border-amber/40">
+            <span className="text-[13px] font-semibold text-ink">App tutorial</span>
+            <span className="font-mono text-[11px] text-amber">Replay</span>
           </button>
 
           {/* logout — visible for every role */}

@@ -16,6 +16,9 @@ interface ProfileRow {
   points: number;
   notification_approval: boolean;
   face_enrolled?: boolean;
+  tutorial_completed?: boolean;
+  tutorial_version?: number;
+  tutorial_step?: number;
   created_at: string;
 }
 
@@ -450,7 +453,14 @@ export async function setProfileActiveRemote(id: string, active: boolean): Promi
 export async function setNotificationPreferenceRemote(id: string, enabled: boolean): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");
-  const { error } = await client.from("profiles").update({ notification_approval: enabled }).eq("id", id);
+  const { error } = await client.rpc("set_notification_preference", { enabled });
+  if (error) throw new Error(error.message);
+}
+
+export async function saveTutorialState(id: string, state: { completed: boolean; version: number; step: number }): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.rpc("save_tutorial_state", { completed: state.completed, version: state.version, step: state.step });
   if (error) throw new Error(error.message);
 }
 
@@ -558,6 +568,9 @@ function mapProfile(row: ProfileRow): User {
     active: row.active,
     createdAt: row.created_at,
     notifApproval: row.notification_approval,
+    tutorialCompleted: Boolean(row.tutorial_completed),
+    tutorialVersion: Number(row.tutorial_version ?? 1),
+    tutorialStep: Number(row.tutorial_step ?? 0),
   };
 }
 

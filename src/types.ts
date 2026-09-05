@@ -16,6 +16,9 @@ export interface User {
   active: boolean;
   createdAt: string;
   notifApproval: boolean;
+  tutorialCompleted?: boolean;
+  tutorialVersion?: number;
+  tutorialStep?: number;
 }
 
 export interface Attendance {
