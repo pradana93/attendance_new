@@ -185,7 +185,7 @@ export default function SetupWizard() {
               <p className="text-[12px] leading-relaxed text-mut">This creates the <span className="font-semibold text-ink">Super Admin</span> — full access, can create admins & staff.</p>
             </div>
             <Field label="Full name"><input className="inp" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Ratna Maharani" /></Field>
-            <Field label="Email"><input className="inp" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="ratna@nusalogistik.id" /></Field>
+            <Field label="Email"><input className="inp" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@company.com" /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Password"><input className="inp" type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} placeholder="min. 6 chars" /></Field>
               <Field label="Confirm"><input className="inp" type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} /></Field>

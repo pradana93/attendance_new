@@ -60,7 +60,7 @@ export default function Login({ onLogin, onSetup, onChangelog }: { onLogin: (u: 
 
       <form key={shake} onSubmit={submit} className={`card space-y-4 p-5 ${shake ? "a-shake" : "a-rise"}`}>
         <Field label={t("a.email")}>
-          <input className="inp" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@nusalogistik.id" required />
+          <input className="inp" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
         </Field>
         <Field label="Password">
           <input className="inp" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" required />

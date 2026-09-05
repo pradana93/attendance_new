@@ -336,7 +336,7 @@ function StaffPanel({ admin }: { admin: User }) {
 
       <Sheet open={showAdd} onClose={() => setShowAdd(false)} title={t("a.createAccount")}>
         <div className="space-y-3.5">
-          <Field label={t("a.fullName")}><input className="inp" value={name} onChange={(e) => { setName(e.target.value); if (!email) setEmail(e.target.value.toLowerCase().replace(/[^a-z ]/g, "").trim().split(/\s+/).join(".") + "@nusalogistik.id"); }} placeholder="Sari Rahma" /></Field>
+          <Field label={t("a.fullName")}><input className="inp" value={name} onChange={(e) => { setName(e.target.value); if (!email) setEmail(e.target.value.toLowerCase().replace(/[^a-z ]/g, "").trim().split(/\s+/).join(".") + "@company.com"); }} placeholder="Sari Rahma" /></Field>
           <Field label={t("a.email")}><input className="inp" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("a.empId")}><input className="inp font-mono" value={nextId} readOnly /></Field>
