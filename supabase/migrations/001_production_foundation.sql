@@ -94,6 +94,45 @@ as $$
   )
 $$;
 
+create or replace function public.bootstrap_workspace(
+  workspace_name text,
+  workspace_company text,
+  workspace_site_name text,
+  administrator_name text,
+  administrator_email text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_workspace_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'An authenticated user is required';
+  end if;
+
+  if exists (select 1 from public.profiles where id = auth.uid()) then
+    raise exception 'This user already has a workspace profile';
+  end if;
+
+  insert into public.workspaces (name, company, site_name, latitude, longitude, created_by)
+  values (workspace_name, workspace_company, workspace_site_name, 0, 0, auth.uid())
+  returning id into new_workspace_id;
+
+  insert into public.profiles (id, workspace_id, full_name, email, role, employee_id, department)
+  values (auth.uid(), new_workspace_id, administrator_name, administrator_email, 'superadmin', 'ADMIN-001', 'Operations');
+
+  insert into public.workspace_settings (workspace_id)
+  values (new_workspace_id);
+
+  return new_workspace_id;
+end;
+$$;
+
+grant execute on function public.bootstrap_workspace(text, text, text, text, text) to authenticated;
+
 alter table public.workspaces enable row level security;
 alter table public.profiles enable row level security;
 alter table public.attendance enable row level security;
