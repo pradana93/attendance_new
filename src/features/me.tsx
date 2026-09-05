@@ -5,6 +5,8 @@ import {
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
 import { signOut } from "../lib/production";
+import { createLeaveRequest } from "../lib/production";
+import { refreshProductionData } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
@@ -235,14 +237,11 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           <Field label={t("m.leaveReason")}>
             <textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="…" />
           </Field>
-          <Btn className="w-full" busy={busy} disabled={!date || !reason.trim()} onClick={() => {
+          <Btn className="w-full" busy={busy} disabled={!date || !reason.trim()} onClick={async () => {
             setBusy(true);
-            setTimeout(() => {
-              const res = requestLeave(user.id, date, reason.trim());
-              setBusy(false);
-              if (res.ok) { toast(res.msg, "ok"); setLeaveOpen(false); setDate(""); setReason(""); }
-              else toast(res.msg, "err");
-            }, 450);
+            try { await createLeaveRequest({ userId: user.id, date, reason: reason.trim() }); await refreshProductionData(); toast("Leave request submitted", "ok"); setLeaveOpen(false); setDate(""); setReason(""); }
+            catch (error) { toast(error instanceof Error ? error.message : "Could not submit leave request", "err"); }
+            finally { setBusy(false); }
           }}><Plane size={15} /> {t("m.submit")}</Btn>
         </div>
       </Sheet>

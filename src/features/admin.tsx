@@ -18,6 +18,8 @@ import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
 import { testSupabaseConnection, initSupabase } from "../lib/supabase";
 import { createStaffAccount, workspaceProfiles } from "../lib/production";
+import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote } from "../lib/production";
+import { refreshProductionData } from "../lib/store";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -326,7 +328,7 @@ function StaffPanel({ admin }: { admin: User }) {
               <button onClick={() => setEditUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-amber/50 hover:text-amber" aria-label={t("a.editUser")}>
                 <Pencil size={13} />
               </button>
-              {u.id !== admin.id && u.role !== "superadmin" && <Toggle on={u.active} onChange={() => { toggleActive(u.id); toast(`${u.name} ${u.active ? "deactivated" : "reactivated"}`, "info"); }} />}
+              {u.id !== admin.id && u.role !== "superadmin" && <Toggle on={u.active} onChange={async () => { try { await setProfileActiveRemote(u.id, !u.active); await refreshProductionData(); setProfiles(await workspaceProfiles()); toast(`${u.name} ${u.active ? "deactivated" : "reactivated"}`, "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not update account", "err"); } }} />}
             </div>
           </div>
         ))}
@@ -362,13 +364,13 @@ function StaffPanel({ admin }: { admin: User }) {
         </div>
       </Sheet>
 
-      <EditUserSheet user={editUser} onClose={() => setEditUser(null)} />
+      <EditUserSheet user={editUser} onClose={() => setEditUser(null)} onSaved={async () => setProfiles(await workspaceProfiles())} />
     </div>
   );
 }
 
 /* ---------------- edit existing account ---------------- */
-function EditUserSheet({ user, onClose }: { user: User | null; onClose: () => void }) {
+function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const db = getDB();
   const t = useT();
   const [name, setName] = useState("");
@@ -416,11 +418,9 @@ function EditUserSheet({ user, onClose }: { user: User | null; onClose: () => vo
               ))}
             </div>
           </Field>
-          <Btn className="w-full" onClick={() => {
-            const res = updateUser(user.id, { name, email, employeeId: empId, role: isSuper ? "superadmin" : role, department: dept });
-            if (!res.ok) { toast(res.msg, "err"); return; }
-            toast(res.msg, "ok");
-            onClose();
+          <Btn className="w-full" onClick={async () => {
+            try { await updateProfileRemote({ id: user.id, name, email, employeeId: empId, role: isSuper ? "superadmin" : role, department: dept }); await refreshProductionData(); await onSaved(); toast(`${name}'s account updated.`, "ok"); onClose(); }
+            catch (error) { toast(error instanceof Error ? error.message : "Could not update account", "err"); }
           }}><Check size={15} /> {t("a.updateUser")}</Btn>
         </div>
       )}
@@ -517,11 +517,10 @@ function NoticePanel({ admin }: { admin: User }) {
         </Field>
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 text-[12.5px] text-mut"><Toggle on={pinned} onChange={setPinned} /> {t("a.pinDash")}</label>
-          <Btn onClick={() => {
+          <Btn onClick={async () => {
             if (!title.trim() || !body.trim()) { toast("Title and message required", "err"); return; }
-            addAnnouncement({ title: title.trim(), body: body.trim(), author: admin.name, pinned });
-            toast("Broadcast sent to all staff");
-            setTitle(""); setBody(""); setPinned(false);
+            try { await createAnnouncement({ title: title.trim(), body: body.trim(), authorId: admin.id, pinned }); await refreshProductionData(); toast("Broadcast sent to all staff"); setTitle(""); setBody(""); setPinned(false); }
+            catch (error) { toast(error instanceof Error ? error.message : "Could not send announcement", "err"); }
           }}><Megaphone size={14} /> {t("a.broadcast")}</Btn>
         </div>
       </div>
@@ -535,7 +534,7 @@ function NoticePanel({ admin }: { admin: User }) {
               <div className="flex items-center gap-2">
                 {a.pinned && <Chip tone="amber">{t("a.pinned")}</Chip>}
                 <span className="font-mono text-[10px] text-faint">{a.date} · {a.author}</span>
-                <button onClick={() => { deleteAnnouncement(a.id); toast("Removed", "info"); }}
+                <button onClick={async () => { try { await deleteAnnouncementRemote(a.id); await refreshProductionData(); toast("Removed", "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not remove announcement", "err"); } }}
                   className="tap ml-auto rounded-lg border border-line bg-panel2 p-1.5 text-faint hover:text-bad" aria-label="Delete"><Trash2 size={13} /></button>
               </div>
               <p className="ttl mt-1.5 text-[15px] font-bold text-ink">{a.title}</p>

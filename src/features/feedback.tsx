@@ -5,6 +5,8 @@ import { getDB, submitFeedback, updateFeedbackStatus, deleteFeedback, userName }
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, StatusBadge, toast } from "../components/ui";
 import { takePhoto } from "../components/capture";
+import { createFeedback, deleteFeedbackRemote, updateFeedbackRemote } from "../lib/production";
+import { refreshProductionData } from "../lib/store";
 
 export function FeedbackSheet({ open, onClose, user }: { open: boolean; onClose: () => void; user: User }) {
   const t = useT();
@@ -17,31 +19,14 @@ export function FeedbackSheet({ open, onClose, user }: { open: boolean; onClose:
   const [busy, setBusy] = useState(false);
   const db = getDB();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setBusy(true);
-    setTimeout(() => {
-      const res = submitFeedback({
-        userId: user.id,
-        type,
-        priority,
-        title,
-        description,
-        screenshot,
-        contactEmail: contactEmail.trim() || undefined,
-        route: window.location.hash,
-      });
-      setBusy(false);
-      if (res.ok) {
-        toast(res.msg, "ok");
-        onClose();
-        setTitle("");
-        setDescription("");
-        setScreenshot(undefined);
-        setContactEmail("");
-      } else {
-        toast(res.msg, "err");
-      }
-    }, 500);
+    try {
+      await createFeedback({ userId: user.id, type, priority, title: title.trim(), description: description.trim(), screenshot, contactEmail: contactEmail.trim() || undefined, route: window.location.hash });
+      await refreshProductionData();
+      toast("Feedback submitted", "ok"); onClose(); setTitle(""); setDescription(""); setScreenshot(undefined); setContactEmail("");
+    } catch (error) { toast(error instanceof Error ? error.message : "Could not submit feedback", "err"); }
+    finally { setBusy(false); }
   };
 
   const handleTakePhoto = async () => {
@@ -265,11 +250,10 @@ export function FeedbackInbox({ admin }: { admin: User }) {
       <Confirm
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onYes={() => {
-          if (deleteId) deleteFeedback(deleteId);
-          setDeleteId(null);
-          setSelectedFb(null);
-          toast("Feedback deleted", "ok");
+        onYes={async () => {
+          if (!deleteId) return;
+          try { await deleteFeedbackRemote(deleteId); await refreshProductionData(); setDeleteId(null); setSelectedFb(null); toast("Feedback deleted", "ok"); }
+          catch (error) { toast(error instanceof Error ? error.message : "Could not delete feedback", "err"); }
         }}
         danger
         title={t("fb.deleteQ")}
@@ -297,15 +281,15 @@ function FeedbackDetail({
   const [note, setNote] = useState(fb.adminNote || "");
   const u = db?.users.find((x) => x.id === fb.userId);
 
-  const handleStatusChange = (s: Feedback["status"]) => {
+  const handleStatusChange = async (s: Feedback["status"]) => {
     setStatus(s);
-    updateFeedbackStatus(fb.id, s, admin.id, note);
-    toast(`Status: ${s}`, "ok");
+    try { await updateFeedbackRemote(fb.id, { status: s, adminNote: note, decidedBy: admin.id }); await refreshProductionData(); toast(`Status: ${s}`, "ok"); }
+    catch (error) { toast(error instanceof Error ? error.message : "Could not update feedback", "err"); }
   };
 
-  const handleSaveNote = () => {
-    updateFeedbackStatus(fb.id, status, admin.id, note);
-    toast("Admin note saved", "ok");
+  const handleSaveNote = async () => {
+    try { await updateFeedbackRemote(fb.id, { status, adminNote: note, decidedBy: admin.id }); await refreshProductionData(); toast("Admin note saved", "ok"); }
+    catch (error) { toast(error instanceof Error ? error.message : "Could not save note", "err"); }
   };
 
   return (

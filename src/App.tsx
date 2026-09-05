@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Bell, Boxes, CalendarDays, ChevronLeft, Download, History, Home, LogOut, Settings2, User as UserIcon, WifiOff } from "lucide-react";
 import type { User } from "./types";
-import { getDB, initStore, markNotisRead, unreadCount, updateSettings, useDB } from "./lib/store";
+import { getDB, initStore, markNotisRead, refreshProductionData, unreadCount, updateSettings, useDB } from "./lib/store";
 import { fmtClock, fmtDate, relTime } from "./lib/util";
 import { useT } from "./lib/i18n";
 import { APP_VERSION } from "./lib/store";
@@ -53,6 +53,7 @@ export default function App() {
       if (next) {
         const remoteSettings = await workspaceSettings();
         if (remoteSettings) updateSettings(remoteSettings);
+        await refreshProductionData();
       }
       setCur(next);
     }).finally(() => setAuthChecking(false));

@@ -13,6 +13,8 @@ import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, vibrate } from 
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
+import { addRewardItemRemote, completePiketRemote, deleteTaskRemote, redeemRewardRemote, rotateTemplateRemote, saveTaskRemote, setAssignmentRemote } from "../lib/production";
+import { refreshProductionData } from "../lib/store";
 
 const AREAS = ["Depan", "Tengah", "Belakang", "Gudang", "Umum"];
 const DAY_LABELS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -85,13 +87,14 @@ function Roster({ user }: { user: User }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, db?.piketLog.length, db?.template.length]);
 
-  const doComplete = (task: PiketTask, date: string, userId: string, photo?: string) => {
-    const res = completePiket(date, task.id, userId, photo);
-    if (res.ok) {
+  const doComplete = async (task: PiketTask, date: string, userId: string, photo?: string) => {
+    try {
+      await completePiketRemote(task.id, date, photo);
+      await refreshProductionData();
       vibrate([30, 50, 60]);
-      toast(`${task.name} · ${res.msg}`, "ok");
+      toast(`${task.name} · completed`, "ok");
       confetti({ particleCount: 40, spread: 58, origin: { y: 0.7 }, colors: ["#ffb224", "#3ed598"], disableForReducedMotion: true });
-    } else toast(res.msg, "err");
+    } catch (error) { toast(error instanceof Error ? error.message : "Could not complete task", "err"); }
   };
 
   return (
@@ -214,7 +217,7 @@ function Roster({ user }: { user: User }) {
       {isAdmin && adminView === "template" && (
         <>
           <div className="flex gap-2">
-            <Btn variant="ghost" className="flex-1" onClick={() => { rotateTemplate(); toast(t("p.rotated")); }}>
+            <Btn variant="ghost" className="flex-1" onClick={async () => { try { await rotateTemplateRemote(); await refreshProductionData(); toast(t("p.rotated")); } catch (error) { toast(error instanceof Error ? error.message : "Could not rotate roster", "err"); } }}>
               <RotateCw size={14} /> {t("p.rotate")}
             </Btn>
             <Btn className="flex-1" onClick={() => setEditing("new")}><Plus size={14} /> {t("p.addTask")}</Btn>
@@ -271,7 +274,7 @@ function Roster({ user }: { user: User }) {
 
       <Confirm open={!!delTask} onClose={() => setDelTask(null)} danger title={`${t("c.delete")}: ${delTask?.name ?? ""}?`}
         body="The task and all its weekly assignments will be removed. History is kept."
-        yesLabel={t("c.delete")} onYes={() => { if (delTask) { deleteTask(delTask.id); toast(`${delTask.name} removed`, "info"); } }} />
+        yesLabel={t("c.delete")} onYes={async () => { if (delTask) { try { await deleteTaskRemote(delTask.id); await refreshProductionData(); toast(`${delTask.name} removed`, "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not remove task", "err"); } } }} />
 
       {/* real camera proof capture */}
       <CaptureSheet
@@ -416,14 +419,14 @@ function AssignSheet({ assignFor, onClose, day, staff, current }: {
     <Sheet open={!!assignFor} onClose={onClose} title={`${t("p.assign")} · ${assignFor?.taskName ?? ""}`}>
       <div className="space-y-1.5">
         {cur && (
-          <button onClick={() => { setAssignment(assignFor!.taskId, day, null); toast(t("p.unassign"), "info"); onClose(); }}
+          <button onClick={async () => { try { await setAssignmentRemote(assignFor!.taskId, day, null); await refreshProductionData(); toast(t("p.unassign"), "info"); onClose(); } catch (error) { toast(error instanceof Error ? error.message : "Could not update assignment", "err"); } }}
             className="tap flex w-full items-center gap-3 rounded-xl border border-dashed border-bad/40 bg-bad/6 px-3.5 py-2.5 text-left">
             <span className="flex h-8 w-8 items-center justify-center rounded-full border border-bad/40 text-bad"><Trash2 size={13} /></span>
             <span className="text-[13px] font-medium text-bad">{t("p.unassign")}</span>
           </button>
         )}
         {staff.map((u) => (
-          <button key={u.id} onClick={() => { setAssignment(assignFor!.taskId, day, u.id); toast(`${u.name.split(" ")[0]} → ${assignFor?.taskName}`); onClose(); }}
+          <button key={u.id} onClick={async () => { try { await setAssignmentRemote(assignFor!.taskId, day, u.id); await refreshProductionData(); toast(`${u.name.split(" ")[0]} → ${assignFor?.taskName}`); onClose(); } catch (error) { toast(error instanceof Error ? error.message : "Could not update assignment", "err"); } }}
             className={`tap flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left ${cur?.userId === u.id ? "border-amber/60 bg-amber/10" : "border-line bg-panel2 hover:border-faint"}`}>
             <Avatar user={u} size={30} />
             <div className="flex-1">
@@ -482,11 +485,10 @@ function TaskEditor({ editing, onClose, onDelete }: { editing: PiketTask | "new"
             <Toggle on={f.active} onChange={(v) => setF({ ...f, active: v })} />
           </label>
         )}
-        <Btn className="w-full" onClick={() => {
+        <Btn className="w-full" onClick={async () => {
           if (!f.name.trim()) { toast("Task name required", "err"); return; }
-          saveTask({ ...(isNew ? {} : { id: (editing as PiketTask).id }), ...f, name: f.name.trim() });
-          toast(isNew ? `${f.name.trim()} added to catalog` : `${f.name.trim()} updated`);
-          onClose();
+          try { await saveTaskRemote({ ...(isNew ? {} : { id: (editing as PiketTask).id }), ...f, name: f.name.trim() }); await refreshProductionData(); toast(isNew ? `${f.name.trim()} added to catalog` : `${f.name.trim()} updated`); onClose(); }
+          catch (error) { toast(error instanceof Error ? error.message : "Could not save task", "err"); }
         }}><Check size={15} /> {t("c.save")}</Btn>
         {!isNew && editing && (
           <Btn variant="ghost" className="w-full" onClick={() => { onClose(); onDelete(editing as PiketTask); }}>
@@ -557,13 +559,14 @@ function Redeem({ user }: { user: User }) {
   const item = db.items.find((i) => i.id === target);
   const history = db.redemptions.filter((r) => r.userId === user.id);
 
-  const doRedeem = () => {
+  const doRedeem = async () => {
     if (!target) return;
-    const res = redeem(user.id, target);
-    if (res.ok) {
-      toast(`${res.msg} — ${t("p.collect")}`, "ok");
+    try {
+      await redeemRewardRemote(target);
+      await refreshProductionData();
+      toast(`${t("p.redeem")} — ${t("p.collect")}`, "ok");
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#ffb224", "#3ed598", "#5ac8e8"], disableForReducedMotion: true });
-    } else toast(res.msg, "err");
+    } catch (error) { toast(error instanceof Error ? error.message : "Could not redeem reward", "err"); }
     setTarget(null);
   };
 
@@ -653,11 +656,10 @@ function Redeem({ user }: { user: User }) {
               ))}
             </div>
           </Field>
-          <Btn className="w-full" onClick={() => {
+          <Btn className="w-full" onClick={async () => {
             if (!nName.trim() || nCost <= 0) { toast("Name and positive cost required", "err"); return; }
-            addItem({ name: nName.trim(), cost: nCost, stock: nStock, cat: nCat });
-            toast(`${nName.trim()} + catalog`);
-            setShowAdd(false); setNName("");
+            try { await addRewardItemRemote({ name: nName.trim(), cost: nCost, stock: nStock, cat: nCat }); await refreshProductionData(); toast(`${nName.trim()} + catalog`); setShowAdd(false); setNName(""); }
+            catch (error) { toast(error instanceof Error ? error.message : "Could not add reward", "err"); }
           }}><Plus size={15} /> {t("p.addToCatalog")}</Btn>
         </div>
       </Sheet>

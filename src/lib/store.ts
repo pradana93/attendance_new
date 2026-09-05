@@ -4,7 +4,7 @@ import type {
   PointEvent, Redemption, RedeemItem, Role, Settings, SwapRequest, User,
 } from "../types";
 import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
-import { saveWorkspaceSettings } from "./production";
+import { loadWorkspaceData, saveWorkspaceSettings } from "./production";
 
 const DB_KEY = "shiftgate.db.v3";
 const SESSION_KEY = "shiftgate.session";
@@ -27,6 +27,14 @@ const mutate = () => { persist(); emit(); };
 
 export const getDB = () => cache;
 export const useDB = (): DB | null => useSyncExternalStore(subscribe, getDB);
+
+export async function refreshProductionData() {
+  if (!cache) initStore();
+  const remote = await loadWorkspaceData();
+  if (!cache) return;
+  cache = { ...cache, ...remote };
+  emit();
+}
 
 function emptyDB(): DB {
   return {

@@ -3,7 +3,9 @@ import {
   Banknote, CalendarPlus, Camera, Check, Clock3, Download, Filter, History, Search, Timer, X,
 } from "lucide-react";
 import type { Overtime, User } from "../types";
-import { cancelOvertime, decideOvertime, getDB, otHours, submitOvertime, userName } from "../lib/store";
+import { getDB, otHours, userName } from "../lib/store";
+import { cancelOvertimeRequest, createOvertimeRequest, decideOvertimeRequest } from "../lib/production";
+import { refreshProductionData } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDR, fmtIDRFull, hoursBetween, relTime, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, Reveal, SectionTitle, Seg, Sheet, toast } from "../components/ui";
@@ -203,11 +205,14 @@ export default function Overtime({ user }: { user: User }) {
             <textarea className="inp min-h-[64px] resize-none" value={note} onChange={(e) => setNote(e.target.value)}
               placeholder={deciding?.approve ? "Approved — good work." : "Reason for rejection…"} />
           </Field>
-          <Btn variant={deciding?.approve ? "ok" : "danger"} className="w-full" onClick={() => {
+          <Btn variant={deciding?.approve ? "ok" : "danger"} className="w-full" onClick={async () => {
             if (!deciding) return;
-            decideOvertime(deciding.id, deciding.approve, note.trim(), user.name);
-            toast(deciding.approve ? "Overtime approved" : "Overtime rejected", deciding.approve ? "ok" : "info");
-            setDeciding(null); setDetail(null);
+            try {
+              await decideOvertimeRequest({ id: deciding.id, approve: deciding.approve, note: note.trim(), deciderId: user.id });
+              await refreshProductionData();
+              toast(deciding.approve ? "Overtime approved" : "Overtime rejected", deciding.approve ? "ok" : "info");
+              setDeciding(null); setDetail(null);
+            } catch (error) { toast(error instanceof Error ? error.message : "Could not update overtime", "err"); }
           }}>
             {deciding?.approve ? <Check size={15} /> : <X size={15} />} {deciding?.approve ? t("o.approve") : t("o.reject")}
           </Btn>
@@ -216,7 +221,7 @@ export default function Overtime({ user }: { user: User }) {
 
       <Confirm open={!!cancelId} onClose={() => setCancelId(null)} danger title={t("o.cancelReq") + "?"}
         body="The pending request will be removed." yesLabel={t("c.cancel")}
-        onYes={() => { if (cancelId) { cancelOvertime(cancelId); toast("Request cancelled", "info"); setDetail(null); } }} />
+        onYes={async () => { if (cancelId) { try { await cancelOvertimeRequest(cancelId); await refreshProductionData(); toast("Request cancelled", "info"); setDetail(null); } catch (error) { toast(error instanceof Error ? error.message : "Could not cancel request", "err"); } } }} />
 
       <Lightbox src={viewPhoto?.src ?? null} onClose={() => setViewPhoto(null)} caption={viewPhoto?.caption} />
     </div>
@@ -294,14 +299,11 @@ function NewRequest({ user, open, onClose }: { user: User; open: boolean; onClos
           </div>
         )}
 
-        <Btn className="w-full" busy={busy} disabled={h <= 0 || overlap || !reason.trim()} onClick={() => {
+        <Btn className="w-full" busy={busy} disabled={h <= 0 || overlap || !reason.trim()} onClick={async () => {
           setBusy(true);
-          setTimeout(() => {
-            const res = submitOvertime(user.id, date, start, end, reason.trim(), photo ?? undefined);
-            setBusy(false);
-            if (res.ok) { toast(res.msg, "ok"); setReason(""); setPhoto(null); onClose(); }
-            else toast(res.msg, "err");
-          }, 500);
+          try { await createOvertimeRequest({ userId: user.id, date, start, end, reason: reason.trim(), photo: photo ?? undefined }); await refreshProductionData(); toast("Overtime request submitted", "ok"); setReason(""); setPhoto(null); onClose(); }
+          catch (error) { toast(error instanceof Error ? error.message : "Could not submit overtime", "err"); }
+          finally { setBusy(false); }
         }}>
           <CalendarPlus size={15} /> {t("m.submit")}
         </Btn>
