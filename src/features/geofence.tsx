@@ -171,18 +171,21 @@ export function GeofenceStudio({ open, onClose }: { open: boolean; onClose: () =
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg border border-line bg-panel1 p-3 text-center">
-            <p className="font-mono text-[11px] text-faint">LAT</p>
-            <p className="ttl text-[16px] font-bold text-ink">{temp.lat.toFixed(6)}</p>
-          </div>
-          <div className="rounded-lg border border-line bg-panel1 p-3 text-center">
-            <p className="font-mono text-[11px] text-faint">LNG</p>
-            <p className="ttl text-[16px] font-bold text-ink">{temp.lng.toFixed(6)}</p>
-          </div>
-          <div className="rounded-lg border border-line bg-panel1 p-3 text-center">
-            <p className="font-mono text-[11px] text-faint">RADIUS</p>
-            <p className="ttl text-[16px] font-bold text-ok">{temp.radius}m</p>
-          </div>
+          <label className="rounded-lg border border-line bg-panel1 p-3">
+            <span className="font-mono text-[11px] text-faint">LATITUDE</span>
+            <input className="inp mt-1 w-full font-mono text-[13px]" type="number" step="0.000001" value={temp.lat}
+              onChange={(e) => setTemp({ ...temp, lat: Number(e.target.value) })} />
+          </label>
+          <label className="rounded-lg border border-line bg-panel1 p-3">
+            <span className="font-mono text-[11px] text-faint">LONGITUDE</span>
+            <input className="inp mt-1 w-full font-mono text-[13px]" type="number" step="0.000001" value={temp.lng}
+              onChange={(e) => setTemp({ ...temp, lng: Number(e.target.value) })} />
+          </label>
+          <label className="rounded-lg border border-line bg-panel1 p-3">
+            <span className="flex items-center justify-between font-mono text-[11px] text-faint"><span>RADIUS</span><strong className="text-ok">{temp.radius}m</strong></span>
+            <input className="mt-3 w-full accent-[var(--ok)]" type="range" min="50" max="500" step="5" value={temp.radius}
+              onChange={(e) => setTemp({ ...temp, radius: Number(e.target.value) })} />
+          </label>
         </div>
 
         <p className="font-mono text-[10px] text-faint">

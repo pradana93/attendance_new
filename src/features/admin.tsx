@@ -167,9 +167,6 @@ function LiveBoard() {
         </div>
       </div>
 
-      {/* floor radar — live positions of on-duty staff */}
-      <FloorRadar onDutyIds={onDuty.map((r) => r.userId)} />
-
       <div className="flex items-center justify-between">
         <p className="font-mono text-[10.5px] uppercase tracking-widest text-faint">auto-refresh · {today}</p>
         <div className="flex gap-2">

@@ -725,7 +725,6 @@ export function perfIndex(pct: number, lates: number, points: number): number {
 export function statsFor(userId: string): UserStats | null {
   if (!cache) return null;
   const u = userById(userId);
-  if (!u) return null;
   const rows = cache.attendance.filter((a) => a.userId === userId).sort((a, b) => a.date.localeCompare(b.date));
   const now = new Date();
   const ym = now.toISOString().slice(0, 7);
@@ -753,7 +752,7 @@ export function statsFor(userId: string): UserStats | null {
     lates,
     earlies: rows.filter((r) => r.early).length,
     otHours: cache.ot.filter((o) => o.userId === userId && o.status === "approved").reduce((s, o) => s + otHours(o), 0),
-    points: u.points,
+    points: u?.points ?? 0,
     leaveDays: cache.leaves.filter((l) => l.userId === userId && l.status === "approved").length,
     monthPct: Math.min(100, Math.round((monthRows.filter((r) => r.checkIn).length / monthDen) * 100)),
     ytd: Array.from({ length: now.getMonth() + 1 }, (_, m) => {
@@ -763,7 +762,7 @@ export function statsFor(userId: string): UserStats | null {
     }),
     heat, weeks,
     streak: (() => { let s = 0; for (let b = rows.length - 1; b >= 0; b--) { if (rows[b].checkIn && !rows[b].late) s++; else break; } return s; })(),
-    score: perfIndex(Math.min(100, pct), lates, u.points),
+    score: perfIndex(Math.min(100, pct), lates, u?.points ?? 0),
   };
 }
 
