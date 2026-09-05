@@ -116,7 +116,13 @@ export async function createStaffAccount(input: {
   const client = productionClient();
   if (!client) return { ok: false, message: "Supabase is not configured for this deployment." };
   const { data, error } = await client.functions.invoke("create-staff", { body: input });
-  if (error) return { ok: false, message: error.message };
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("failed to send a request") || message.includes("edge function")) {
+      return { ok: false, message: "The create-staff Edge Function is unavailable. Deploy it to the same Supabase project as this app, then try again." };
+    }
+    return { ok: false, message: error.message };
+  }
   if (data?.error) return { ok: false, message: data.error };
   return { ok: true, message: `${input.name} created.`, profile: data?.profile ? mapProfile(data.profile as ProfileRow) : undefined };
 }
