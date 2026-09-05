@@ -105,6 +105,30 @@ export async function signOut(): Promise<void> {
   await productionClient()?.auth.signOut();
 }
 
+export async function createStaffAccount(input: {
+  name: string;
+  email: string;
+  employeeId: string;
+  role: "admin" | "staff";
+  department: string;
+  password: string;
+}): Promise<{ ok: boolean; message: string; profile?: User }> {
+  const client = productionClient();
+  if (!client) return { ok: false, message: "Supabase is not configured for this deployment." };
+  const { data, error } = await client.functions.invoke("create-staff", { body: input });
+  if (error) return { ok: false, message: error.message };
+  if (data?.error) return { ok: false, message: data.error };
+  return { ok: true, message: `${input.name} created.`, profile: data?.profile ? mapProfile(data.profile as ProfileRow) : undefined };
+}
+
+export async function workspaceProfiles(): Promise<User[]> {
+  const client = productionClient();
+  if (!client) return [];
+  const { data, error } = await client.from("profiles").select("*").order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as ProfileRow[]).map(mapProfile);
+}
+
 export async function currentProductionUser(): Promise<User | null> {
   const client = productionClient();
   if (!client) return null;

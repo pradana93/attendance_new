@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import type { Lang, Role, User } from "../types";
 import {
-  addAnnouncement, addStaff, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
+  addAnnouncement, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
   getDB, manualLog, rerunSetup, reviewSelfReport,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
@@ -17,6 +17,7 @@ import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
 import { testSupabaseConnection, initSupabase } from "../lib/supabase";
+import { createStaffAccount, workspaceProfiles } from "../lib/production";
 
 export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
@@ -281,30 +282,34 @@ function StaffPanel({ admin }: { admin: User }) {
   const [pw, setPw] = useState(genPw());
   const [saving, setSaving] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [profiles, setProfiles] = useState<User[]>([admin]);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
+  useEffect(() => {
+    workspaceProfiles().then(setProfiles).catch((error) => toast(error instanceof Error ? error.message : "Could not load staff", "err")).finally(() => setLoadingProfiles(false));
+  }, []);
   if (!db) return null;
   const isSuper = admin.role === "superadmin";
-  const nextId = "WMS-0" + (10 + db.users.length + 1);
+  const nextId = "WMS-" + String(100 + profiles.length + 1).padStart(3, "0");
 
-  const save = () => {
-    if (!name.trim() || !email.includes("@")) { toast("Name and valid email required", "err"); return; }
+  const save = async () => {
+    if (!name.trim() || !email.includes("@") || pw.length < 8) { toast("Name, valid email, and an 8-character password are required", "err"); return; }
     setSaving(true);
-    setTimeout(() => {
-      const res = addStaff({ name: name.trim(), email: email.trim(), employeeId: nextId, role, department: dept, password: pw });
-      setSaving(false);
-      if (!res.ok) { toast(res.msg, "err"); return; }
-      toast(res.msg, "ok");
-      setShowAdd(false); setName(""); setEmail(""); setPw(genPw());
-    }, 500);
+    const res = await createStaffAccount({ name: name.trim(), email: email.trim(), employeeId: nextId, role: role === "admin" ? "admin" : "staff", department: dept, password: pw });
+    setSaving(false);
+    if (!res.ok) { toast(res.message, "err"); return; }
+    if (res.profile) setProfiles((current) => [...current, res.profile!]);
+    toast(`${res.message} Login credentials are ready.`, "ok");
+    setShowAdd(false); setName(""); setEmail(""); setPw(genPw());
   };
 
   return (
     <div className="a-fadein space-y-3">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{db.users.length} {t("a.accounts")} · {db.users.filter((u) => u.active).length} {t("a.active")}</p>
+        <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.active).length} {t("a.active")}</p>
         <Btn className="!px-3 !py-2" onClick={() => setShowAdd(true)}><UserPlus size={15} /> {t("a.add")}</Btn>
       </div>
       <div className="space-y-2">
-        {db.users.map((u) => (
+        {loadingProfiles ? <div className="card p-4 text-center font-mono text-[11px] text-faint">Loading staff…</div> : profiles.map((u) => (
           <div key={u.id} className={`card flex items-center gap-3 p-3 ${!u.active ? "opacity-60" : ""}`}>
             <Avatar user={u} size={36} />
             <div className="min-w-0 flex-1">
@@ -352,7 +357,7 @@ function StaffPanel({ admin }: { admin: User }) {
           </Field>
           <Field label={t("a.tempPw")}>
             <div className="flex gap-2">
-              <input className="inp font-mono" value={pw} onChange={(e) => setPw(e.target.value)} />
+              <input className="inp font-mono" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
               <Btn variant="ghost" onClick={() => setPw(genPw())}><RefreshCw size={14} /></Btn>
             </div>
           </Field>
