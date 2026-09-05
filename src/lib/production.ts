@@ -54,6 +54,54 @@ export function configureProduction(url: string, key: string): void {
   initSupabase(url, key);
 }
 
+export async function createWorkspaceAdmin(args: {
+  workspaceName: string;
+  company: string;
+  siteName: string;
+  adminName: string;
+  email: string;
+  password: string;
+}): Promise<{ user: User | null; error?: string }> {
+  const client = productionClient();
+  if (!client) return { user: null, error: "Supabase is not configured for this deployment." };
+
+  const { data: authData, error: authError } = await client.auth.signUp({
+    email: args.email,
+    password: args.password,
+  });
+  if (authError || !authData.user) return { user: null, error: authError?.message ?? "Could not create administrator." };
+  if (!authData.session) return { user: null, error: "Supabase requires email confirmation. Confirm the administrator email, then sign in and run setup again." };
+
+  // These tables are created by the production migration. Keep this bootstrap
+  // transaction in one place so the browser never creates partial workspaces.
+  const db = client as any;
+  const { data: workspace, error: workspaceError } = await db.from("workspaces").insert({
+    name: args.workspaceName,
+    company: args.company,
+    site_name: args.siteName,
+    latitude: 0,
+    longitude: 0,
+    created_by: authData.user.id,
+  }).select("id").single();
+  if (workspaceError || !workspace) return { user: null, error: workspaceError?.message ?? "Could not create workspace." };
+
+  const { error: profileError } = await db.from("profiles").insert({
+    id: authData.user.id,
+    workspace_id: workspace.id,
+    full_name: args.adminName,
+    email: args.email,
+    role: "superadmin",
+    employee_id: "ADMIN-001",
+    department: "Operations",
+  });
+  if (profileError) return { user: null, error: profileError.message };
+
+  const { error: settingsError } = await db.from("workspace_settings").insert({ workspace_id: workspace.id });
+  if (settingsError) return { user: null, error: settingsError.message };
+
+  return { user: await profileFor(client, authData.user) };
+}
+
 export async function signIn(email: string, password: string): Promise<{ user: User | null; error?: string }> {
   const client = productionClient();
   if (!client) return { user: null, error: "Supabase is not configured for this deployment." };

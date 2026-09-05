@@ -117,7 +117,8 @@ create policy profiles_self_insert on public.profiles for insert
     id = auth.uid()
     and exists (
       select 1 from public.workspaces
-      where id = workspace_id and created_by = auth.uid()
+      where public.workspaces.id = public.profiles.workspace_id
+        and public.workspaces.created_by = auth.uid()
     )
   );
 

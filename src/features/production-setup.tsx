@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ArrowRight, BookOpen, CheckCircle2, Cloud, ExternalLink, KeyRound, Link2, RefreshCw } from "lucide-react";
+import { ArrowRight, BookOpen, CheckCircle2, Cloud, ExternalLink, KeyRound, Link2, RefreshCw, UserPlus } from "lucide-react";
 import { testSupabaseConnection } from "../lib/supabase";
-import { configureProduction, productionClient } from "../lib/production";
+import { configureProduction, createWorkspaceAdmin, productionClient } from "../lib/production";
 import { Btn, Field, toast } from "../components/ui";
 
 export default function ProductionSetup({ onReady }: { onReady: () => void }) {
@@ -11,6 +11,14 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
   const [schemaReady, setSchemaReady] = useState(false);
   const [error, setError] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("Warehouse workspace");
+  const [company, setCompany] = useState("");
+  const [siteName, setSiteName] = useState("");
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPassword2, setAdminPassword2] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const test = async () => {
     setTesting(true);
@@ -35,6 +43,21 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
     onReady();
   };
 
+  const createAdmin = async () => {
+    if (!workspaceName.trim() || !company.trim() || !siteName.trim() || !adminName.trim() || !adminEmail.includes("@") || adminPassword.length < 8) {
+      setError("Complete the workspace and administrator fields. Password must be at least 8 characters.");
+      return;
+    }
+    if (adminPassword !== adminPassword2) { setError("Administrator passwords do not match."); return; }
+    setCreating(true);
+    setError("");
+    const result = await createWorkspaceAdmin({ workspaceName: workspaceName.trim(), company: company.trim(), siteName: siteName.trim(), adminName: adminName.trim(), email: adminEmail.trim(), password: adminPassword });
+    setCreating(false);
+    if (!result.user) { setError(result.error ?? "Could not create administrator."); return; }
+    toast("Workspace and administrator created", "ok");
+    onReady();
+  };
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-5 py-8">
       <div className="a-drop mb-6 flex items-start gap-3">
@@ -51,7 +74,16 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
         <Field label="Public anon key"><input className="inp font-mono" type="password" value={key} onChange={(e) => { setKey(e.target.value); setSchemaReady(false); }} placeholder="eyJhbGciOiJIUzI1NiIs…" /></Field>
         {error && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[12px] leading-relaxed text-mut">{error}</p>}
         <Btn variant="ghost" className="w-full" busy={testing} disabled={!url || !key} onClick={test}><RefreshCw size={15} /> Test project and schema</Btn>
-        <Btn className="w-full" disabled={!schemaReady} onClick={continueToLogin}><ArrowRight size={15} /> Continue to sign in</Btn>
+        {schemaReady && <div className="space-y-3 border-t border-line2 pt-4">
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-faint"><UserPlus size={13} className="text-ok" /> 02 · create first administrator</div>
+          <Field label="Workspace name"><input className="inp" value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3"><Field label="Company"><input className="inp" value={company} onChange={(e) => setCompany(e.target.value)} /></Field><Field label="Site"><input className="inp" value={siteName} onChange={(e) => setSiteName(e.target.value)} /></Field></div>
+          <Field label="Administrator name"><input className="inp" value={adminName} onChange={(e) => setAdminName(e.target.value)} /></Field>
+          <Field label="Administrator email"><input className="inp" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3"><Field label="Password"><input className="inp" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} /></Field><Field label="Confirm"><input className="inp" type="password" value={adminPassword2} onChange={(e) => setAdminPassword2(e.target.value)} /></Field></div>
+          <Btn className="w-full" busy={creating} onClick={createAdmin}><UserPlus size={15} /> Create workspace and sign in</Btn>
+        </div>}
+        {!schemaReady && <Btn className="w-full" disabled onClick={continueToLogin}><ArrowRight size={15} /> Test schema to continue</Btn>}
       </section>
 
       <button onClick={() => setGuideOpen((open) => !open)} className="tap mt-4 flex w-full items-center gap-2 rounded-xl border border-line bg-panel px-4 py-3 text-left hover:border-cool/50">

@@ -7,7 +7,7 @@ import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
 import type { User } from "../types";
 
-export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => void; onChangelog: () => void }) {
+export default function Login({ onLogin, onSetup, onChangelog }: { onLogin: (u: User) => void; onSetup: () => void; onChangelog: () => void }) {
   const db = getDB();
   const t = useT();
   const [email, setEmail] = useState("");
@@ -71,6 +71,10 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
         </Btn>
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">Supabase Auth · role-based access</p>
       </form>
+
+      <button onClick={onSetup} className="tap mx-auto mt-4 block font-mono text-[10.5px] uppercase tracking-widest text-faint hover:text-amber">
+        First-time setup · create administrator
+      </button>
 
       <button onClick={onChangelog}
         className="tap mx-auto mt-6 inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-widest text-faint hover:text-amber">
