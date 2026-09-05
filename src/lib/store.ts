@@ -8,7 +8,7 @@ import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, u
 const DB_KEY = "shiftgate.db.v3";
 const SESSION_KEY = "shiftgate.session";
 const REMEMBER_KEY = "shiftgate.remember";
-const VERSION = 4;
+const VERSION = 5;
 
 const defaultSettings: Settings = {
   appName: "ShiftGate", company: "PT Nusa Logistik", siteName: "WH-01 · Jakarta",
@@ -26,6 +26,16 @@ const mutate = () => { persist(); emit(); };
 
 export const getDB = () => cache;
 export const useDB = (): DB | null => useSyncExternalStore(subscribe, getDB);
+
+function emptyDB(): DB {
+  return {
+    version: VERSION,
+    settings: { ...defaultSettings, supabase: { ...defaultSettings.supabase } },
+    users: [], attendance: [], tasks: [], template: [], piketLog: [], ot: [],
+    pointEvents: [], redemptions: [], items: [], announcements: [], notifications: [],
+    leaves: [], handovers: [], swapRequests: [], swapOverrides: [], feedback: [],
+  };
+}
 
 /* ================= seed ================= */
 const seedTasks = (): PiketTask[] => [
@@ -243,13 +253,7 @@ function mulberry(a: number) {
 }
 
 /* ================= constants ================= */
-/** Permanent Super Admin credentials (fixed for this deployment) */
-export const SUPER_EMAIL = "majestap93@gmail.com";
-export const SUPER_PASSWORD = "super123";
 export const APP_VERSION = "2.2.0";
-
-/** Gmail SMTP relay used for password-reset delivery */
-export const SMTP_RELAY = { host: "smtp.gmail.com", port: 587, security: "STARTTLS", from: "ShiftGate <no-reply@shiftgate.app>" };
 
 /* ================= lifecycle ================= */
 export function initStore() {
@@ -257,17 +261,10 @@ export function initStore() {
   try {
     const raw = localStorage.getItem(DB_KEY);
     const parsed = raw ? (JSON.parse(raw) as DB) : null;
-    cache = parsed && parsed.version === VERSION ? parsed : seed();
+    cache = parsed && parsed.version === VERSION ? parsed : emptyDB();
     if (!parsed || parsed.version !== VERSION) persist();
   } catch {
-    cache = seed();
-    persist();
-  }
-  // Super Admin credentials are permanent — enforce on every load
-  const sup = cache!.users.find((u) => u.role === "superadmin");
-  if (sup && (sup.email !== SUPER_EMAIL || sup.password !== SUPER_PASSWORD)) {
-    sup.email = SUPER_EMAIL;
-    sup.password = SUPER_PASSWORD;
+    cache = emptyDB();
     persist();
   }
 }
@@ -287,24 +284,13 @@ export function rerunSetup() {
   emit();
 }
 
-export function resetDemoData() {
-  if (!cache) return;
-  const keep = { settings: cache.settings, users: cache.users };
-  const fresh = seed();
-  cache = { ...fresh, settings: cache.settings, users: cache.users.map((u) => ({ ...u, points: fresh.users.find((f) => f.id === u.id)?.points ?? 0 })) };
-  void keep;
-  persist(); emit();
-}
-
 export function completeSetup(args: { appName: string; company: string; logo?: string; hue: number; siteName: string; lat: number; lng: number; radius: number; adminName: string; adminEmail: string; adminPassword: string }) {
   initStore();
-  // Super Admin sign-in is permanent: majestap93@gmail.com / super123
-  const admin: User = mkUser("u-admin", args.adminName, SUPER_EMAIL, "superadmin", "WMS-001", "Operations", args.hue, SUPER_PASSWORD);
+  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Operations", args.hue, args.adminPassword);
   cache = {
-    ...seed(),
+    ...emptyDB(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
     users: [admin], attendance: [], template: [], piketLog: [], pointEvents: [], redemptions: [], ot: [], notifications: [], leaves: [], handovers: [], swapRequests: [], swapOverrides: [], feedback: [],
-    announcements: [{ id: uid(), title: "Workspace ready", body: "Add staff accounts, then build the weekly piket template in the Piket tab.", author: args.adminName, date: todayKey(), pinned: true }],
   };
   persist(); emit();
 }
@@ -694,7 +680,7 @@ export function updateFeedbackStatus(id: string, status: Feedback["status"], adm
   fb.status = status;
   fb.updatedAt = new Date().toISOString();
   if (adminNote !== undefined) fb.adminNote = adminNote;
-  if (status === "planned" || status === "in_progress" || status === "shipped" || status === "wont_fix") {
+  if (status === "planned" || status === "progress" || status === "shipped" || status === "wont_fix") {
     fb.decidedAt = new Date().toISOString();
     fb.decidedBy = adminId;
   }
@@ -765,14 +751,6 @@ export function updateSettings(patch: Partial<Settings>) {
 /* ================= supabase deploy ================= */
 export function connectSupabase(url: string, key: string) {
   updateSettings({ supabase: { url, key, status: "connected", connectedAt: new Date().toISOString() } });
-}
-
-export function syncSupabase(): { pushed: number; pulled: number } {
-  if (!cache) return { pushed: 0, pulled: 0 };
-  const pushed = cache.attendance.length + cache.piketLog.length + cache.ot.length;
-  const pulled = Math.floor(Math.random() * 5);
-  updateSettings({ supabase: { ...cache.settings.supabase, lastSync: new Date().toISOString() } });
-  return { pushed, pulled };
 }
 
 export function disconnectSupabase() {

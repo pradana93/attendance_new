@@ -66,7 +66,7 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
     const lb = leaderboard();
     return lb.length ? Math.round(lb.reduce((s, b) => s + b.stats.monthPct, 0) / lb.length) : 0;
   }, [now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const inside = geo ? geo.dist <= (db?.settings.radius ?? 100) : null;
+  const inside = geo && !geo.simulated ? geo.dist <= (db?.settings.radius ?? 100) : null;
   const ptsAnim = useCountUp(user.points);
   const pctAnim = useCountUp(isAdmin ? teamAvg : stats?.monthPct ?? 0);
 
@@ -481,7 +481,7 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
   const streamRef = useRef<MediaStream | null>(null);
   const openRef = useRef(open);
 
-  const inside = gps.state === "ok" && db ? gps.dist <= db.settings.radius : null;
+  const inside = gps.state === "ok" && !gps.simulated && db ? gps.dist <= db.settings.radius : null;
 
   // reset + GPS preflight on open
   useEffect(() => {

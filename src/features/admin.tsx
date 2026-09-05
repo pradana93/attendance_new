@@ -7,7 +7,7 @@ import {
 import type { Lang, Role, User } from "../types";
 import {
   addAnnouncement, addStaff, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
-  getDB, manualLog, rerunSetup, resetDemoData, reviewSelfReport, syncSupabase,
+  getDB, manualLog, rerunSetup, reviewSelfReport,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
@@ -548,10 +548,7 @@ function NoticePanel({ admin }: { admin: User }) {
 
 /* ---------------- supabase deploy ---------------- */
 const MIGRATIONS = [
-  "create table users …", "create table attendance …", "create table piket_tasks …",
-  "create table piket_template …", "create table piket_log …", "create table overtime …",
-  "create table leaves …", "create table point_events …", "create table redeem_items + history …",
-  "create table announcements …", "enable row level security …",
+  "verify project credentials …", "check public.settings …", "initialize Supabase client …",
 ];
 
 function CloudPanel() {
@@ -564,7 +561,6 @@ function CloudPanel() {
   const [migStep, setMigStep] = useState(-1);
   const [testing, setTesting] = useState(false);
   const [showSql, setShowSql] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [schemaReady, setSchemaReady] = useState(false);
   const migStarted = useRef(false);
@@ -623,15 +619,11 @@ function CloudPanel() {
             <div className="card2 px-3 py-2"><p className="text-faint">connected</p><p className="mt-0.5 text-ink">{supa.connectedAt ? relTime(supa.connectedAt) : "—"}</p></div>
             <div className="card2 px-3 py-2"><p className="text-faint">{t("dp.lastSync").toLowerCase()}</p><p className="mt-0.5 text-ink">{supa.lastSync ? relTime(supa.lastSync) : "never"}</p></div>
           </div>
-          <div className="mt-3 flex gap-2">
-            <Btn className="flex-1" busy={syncing} onClick={async () => {
-              setSyncing(true);
-              await wait(900);
-              const r = syncSupabase();
-              setSyncing(false);
-              toast(t("dp.pushed", { a: r.pushed, b: r.pulled }), "ok");
-            }}><RefreshCw size={14} /> {t("dp.syncNow")}</Btn>
-            <Btn variant="ghost" onClick={() => setConfirmOff(true)}><LogOut size={14} /> {t("dp.disconnect")}</Btn>
+          <div className="mt-3 space-y-2">
+            <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 font-mono text-[10.5px] leading-relaxed text-mut">
+              Cloud credentials are saved, but application data is not synchronized yet. Do not use this deployment for production attendance until the Supabase data layer is enabled.
+            </p>
+            <Btn variant="ghost" className="w-full" onClick={() => setConfirmOff(true)}><LogOut size={14} /> {t("dp.disconnect")}</Btn>
           </div>
         </div>
 
@@ -692,10 +684,6 @@ function CloudPanel() {
           <Field label={t("dp.key")}>
             <input className="inp font-mono" value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiIs…" />
           </Field>
-          <button onClick={() => { setUrl("https://shiftgate-demo.supabase.co"); setKey("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo-anon-key"); }}
-            className="tap w-full rounded-xl border border-dashed border-cool/40 bg-cool/6 px-3 py-2.5 font-mono text-[11px] text-cool">
-            ⚡ {t("dp.demo")}
-          </button>
           <Btn className="w-full" onClick={() => {
             if (!/^https:\/\/[\w-]+\.supabase\.co$/.test(url.trim())) { toast(t("dp.invalid"), "err"); return; }
             if (key.trim().length < 12) { toast("Anon key looks too short", "err"); return; }
@@ -755,7 +743,6 @@ function CloudPanel() {
 function ConfigPanel() {
   const db = getDB();
   const t = useT();
-  const [confirmReset, setConfirmReset] = useState(false);
   const [confirmSetup, setConfirmSetup] = useState(false);
   const [geofenceOpen, setGeofenceOpen] = useState(false);
   if (!db) return null;
@@ -817,13 +804,6 @@ function ConfigPanel() {
         </div>
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <Users size={15} className="text-faint" />
-            <p className="text-[13px] font-semibold text-ink">{t("a.resetDemo")}</p>
-          </div>
-          <Btn variant="danger" className="!px-3 !py-1.5 text-[12px]" onClick={() => setConfirmReset(true)}>{t("a.reset")}</Btn>
-        </div>
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2.5">
             <RefreshCw size={15} className="text-faint" />
             <p className="text-[13px] font-semibold text-ink">{t("a.rerun")}</p>
           </div>
@@ -834,9 +814,6 @@ function ConfigPanel() {
         {s.appName} · {s.company} · {s.siteName}
       </p>
 
-      <Confirm open={confirmReset} onClose={() => setConfirmReset(false)} danger
-        title={t("a.resetQ")} body={t("a.resetBody")} yesLabel={t("a.reset")}
-        onYes={() => { resetDemoData(); toast("Demo data re-seeded", "info"); }} />
       <Confirm open={confirmSetup} onClose={() => setConfirmSetup(false)} danger
         title={t("a.rerunQ")} body={t("a.rerunBody")} yesLabel={t("a.wipe")} onYes={() => rerunSetup()} />
       <GeofenceStudio open={geofenceOpen} onClose={() => setGeofenceOpen(false)} />

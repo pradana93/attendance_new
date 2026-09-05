@@ -56,7 +56,7 @@ export default function SetupWizard() {
     let finished = false;
     (async () => {
       try {
-        const phases = ["Creating SQLite tables…", "Applying schema v1 (9 tables)…", "Seeding demo workforce…", "Calibrating geofence beacon…", "Warming up face models…"];
+        const phases = ["Preparing workspace settings…", "Validating administrator account…", "Creating empty workspace…", "Saving geofence settings…", "Workspace ready…"];
         for (let i = 0; i < phases.length; i++) {
           if (cancelled) return;
           setInitStep(i);
@@ -193,7 +193,7 @@ export default function SetupWizard() {
             {err && <p className="a-shake rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-[12.5px] text-bad">{err}</p>}
             <div className="card2 flex items-center gap-2.5 px-3.5 py-3">
               <Fingerprint size={16} className="shrink-0 text-cool" />
-              <p className="text-[12px] leading-relaxed text-mut">Face descriptors are encrypted at rest. A demo workforce (7 staff) will be seeded for exploration.</p>
+              <p className="text-[12px] leading-relaxed text-mut">Your workspace starts empty. Add staff accounts after setup, then configure the live Supabase data layer.</p>
             </div>
           </div>
         )}
@@ -206,7 +206,7 @@ export default function SetupWizard() {
             </div>
             <p className="ttl text-lg font-bold text-ink">Initializing database</p>
             <ul className="mt-5 w-full space-y-2.5">
-              {["Create local SQLite store", "Apply schema · users, attendance, schedules, overtime, points", "Seed demo workforce & 11 weeks of history", "Arm geofence + face verification"].map((t, i) => (
+              {["Create workspace settings", "Save attendance and scheduling configuration", "Create administrator account", "Configure geofence and verification"].map((t, i) => (
                 <li key={t} className="flex items-center gap-2.5 text-[13px]">
                   {initStep > i ? <span className="flex h-4.5 w-4.5 items-center justify-center rounded-full bg-ok/20 text-ok">✓</span>
                     : initStep === i ? <Loader2 size={15} className="animate-spin text-amber" />

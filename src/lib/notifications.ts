@@ -47,7 +47,6 @@ export function showNotification(title: string, options?: NotificationOptions): 
     new Notification(title, {
       badge: '/icons/icon-192.png',
       icon: '/icons/icon-192.png',
-      vibrate: [200, 100, 200],
       ...options,
     });
   } catch {

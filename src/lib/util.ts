@@ -92,16 +92,12 @@ export function locateWithFallback(
   timeoutMs = 3500
 ): Promise<{ lat: number; lng: number; simulated: boolean }> {
   return new Promise((resolve) => {
-    const fallback = () => {
-      // Jitter near the gate beacon so the demo flow always completes.
-      resolve({ lat: site.lat + rand(-0.0004, 0.0004), lng: site.lng + rand(-0.0004, 0.0004), simulated: true });
-    };
-    if (!("geolocation" in navigator)) return fallback();
+    if (!("geolocation" in navigator)) return resolve({ lat: site.lat, lng: site.lng, simulated: true });
     let done = false;
     const t = window.setTimeout(() => {
       if (!done) {
         done = true;
-        fallback();
+        resolve({ lat: site.lat, lng: site.lng, simulated: true });
       }
     }, timeoutMs);
     navigator.geolocation.getCurrentPosition(
@@ -116,7 +112,7 @@ export function locateWithFallback(
         if (!done) {
           done = true;
           clearTimeout(t);
-          fallback();
+          resolve({ lat: site.lat, lng: site.lng, simulated: true });
         }
       },
       { timeout: timeoutMs - 300, maximumAge: 60000 }

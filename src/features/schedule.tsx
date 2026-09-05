@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
 import {
   ArrowLeftRight, Camera, Check, ChevronLeft, ChevronRight, ClipboardList, Coffee, Cookie, Gift,
-  Grid3x3, History, Package, Pencil, Plus, RefreshCw, RotateCw, Shield, Sparkles, Ticket, Trash2, Wallet, X,
+  Grid3x3, History, Package, Pencil, Plus, RotateCw, Shield, Sparkles, Ticket, Trash2, Wallet, X,
 } from "lucide-react";
 import type { PiketTask, User } from "../types";
 import {
-  addItem, completePiket, decideSwap, deleteTask, getDB, grantBonus, piketForDate, redeem,
+  addItem, completePiket, decideSwap, deleteTask, getDB, piketForDate, redeem,
   requestSwap, rotateTemplate, saveTask, setAssignment, userName,
 } from "../lib/store";
 import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, vibrate } from "../lib/util";
@@ -549,7 +549,6 @@ function Redeem({ user }: { user: User }) {
   const db = getDB();
   const t = useT();
   const [target, setTarget] = useState<string | null>(null);
-  const [confirmBonus, setConfirmBonus] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [nName, setNName] = useState(""); const [nCost, setNCost] = useState(100); const [nStock, setNStock] = useState(10);
   const [nCat, setNCat] = useState<"Essentials" | "Voucher" | "Gear">("Essentials");
@@ -660,13 +659,9 @@ function Redeem({ user }: { user: User }) {
             toast(`${nName.trim()} + catalog`);
             setShowAdd(false); setNName("");
           }}><Plus size={15} /> {t("p.addToCatalog")}</Btn>
-          <Btn variant="ghost" className="w-full" onClick={() => setConfirmBonus(true)}><RefreshCw size={14} /> +50 bonus pts (demo)</Btn>
         </div>
       </Sheet>
 
-      <Confirm open={confirmBonus} onClose={() => setConfirmBonus(false)} danger={false}
-        title="+50 pts" body={`Grant +50 bonus points to ${user.name}? Logged in the ledger.`}
-        yesLabel="Grant" onYes={() => { grantBonus(user.id, 50, "Admin bonus"); toast("+50 pts ✓"); }} />
     </div>
   );
 }

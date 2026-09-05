@@ -303,12 +303,12 @@ export function LiveDot({ tone = "ok" }: { tone?: "ok" | "amber" | "bad" }) {
 }
 
 /* ---------------- feedback status badge ---------------- */
-export function StatusBadge({ status }: { status: "new" | "in_review" | "planned" | "in_progress" | "shipped" | "wont_fix" }) {
+export function StatusBadge({ status }: { status: "new" | "review" | "planned" | "progress" | "shipped" | "wont_fix" }) {
   const meta = {
     new: { label: "New", tone: "amber" as const },
-    in_review: { label: "Review", tone: "cool" as const },
+    review: { label: "Review", tone: "cool" as const },
     planned: { label: "Planned", tone: "ok" as const },
-    in_progress: { label: "Progress", tone: "cool" as const },
+    progress: { label: "Progress", tone: "cool" as const },
     shipped: { label: "Shipped", tone: "ok" as const },
     wont_fix: { label: "Won't fix", tone: "bad" as const },
   };
