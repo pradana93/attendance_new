@@ -271,7 +271,7 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
           <div className="min-w-0 flex-1 leading-tight">
             <p className="ttl truncate text-[15px] font-bold text-ink">{db.settings.appName}</p>
             <button onClick={() => setStatusOpen(true)} className="tap -ml-1 text-left">
-              <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-wider text-faint hover:text-ink transition-colors">
+              <p className="flex items-center gap-1.5 font-mono text-[11px] font-medium uppercase tracking-wider text-faint hover:text-ink transition-colors">
                 <LiveDot tone={!online ? "bad" : (db.settings.supabase.status === "connected" ? "ok" : "amber")} /> {db.settings.siteName}
                 {tab === "fifth" && adminSec !== "live" && <span className="text-amber">· {adminSec}</span>}
               </p>

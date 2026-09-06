@@ -16,6 +16,7 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
   const db = useDB();
   const t = useT();
   const [checking, setChecking] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
   const [syncCount, setSyncCount] = useState({ pending: 0, total: 0 });
 
@@ -37,7 +38,15 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
     return "Local First";
   };
 
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
   const testLatency = async () => {
+    if (cooldown > 0 || checking) return;
     setChecking(true);
     setLatency(null);
     const start = performance.now();
@@ -58,6 +67,7 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
       setLatency(-1);
     } finally {
       setChecking(false);
+      setCooldown(3); // 3-second cooldown to avoid spamming
     }
   };
 
@@ -147,9 +157,9 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
 
         {/* Control and action buttons */}
         <div className="mt-1 flex gap-2">
-          <Btn variant="ghost" className="flex-1" onClick={testLatency} disabled={checking}>
+          <Btn variant="ghost" className="flex-1" onClick={testLatency} disabled={checking || cooldown > 0}>
             <RefreshCw size={13} className={checking ? "animate-spin" : ""} />
-            Ping Database
+            {cooldown > 0 ? `Wait (${cooldown}s)` : "Ping Database"}
           </Btn>
           <Btn variant="primary" className="flex-1" onClick={async () => {
             setChecking(true);
