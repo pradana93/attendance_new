@@ -4,6 +4,7 @@ import { Sheet, Btn, Chip } from "./ui";
 import { useDB, updateSettings, refreshProductionData, getDB } from "../lib/store";
 import { productionClient, hasProductionConfiguration } from "../lib/production";
 import { useT } from "../lib/i18n";
+import { getSupabase } from "../lib/supabase";
 
 interface ServerStatusSheetProps {
   open: boolean;
@@ -18,8 +19,10 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
   const [latency, setLatency] = useState<number | null>(null);
   const [syncCount, setSyncCount] = useState({ pending: 0, total: 0 });
 
-  const supabaseStatus = db?.settings.supabase.status ?? "off";
-  const supabaseUrl = db?.settings.supabase.url ?? "";
+  const client = productionClient();
+  const hasConfig = hasProductionConfiguration();
+  const supabaseStatus = (online && hasConfig && client) ? "connected" : "off";
+  const supabaseUrl = client?.supabaseUrl ?? db?.settings.supabase.url ?? "";
 
   // Dynamic status details
   const getStatusColor = () => {
