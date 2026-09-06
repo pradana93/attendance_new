@@ -89,7 +89,7 @@ export function haversineM(aLat: number, aLng: number, bLat: number, bLng: numbe
 
 export function locateWithFallback(
   site: { lat: number; lng: number },
-  timeoutMs = 3500
+  timeoutMs = 7000
 ): Promise<{ lat: number; lng: number; simulated: boolean }> {
   return new Promise((resolve) => {
     if (!("geolocation" in navigator)) return resolve({ lat: site.lat, lng: site.lng, simulated: true });
