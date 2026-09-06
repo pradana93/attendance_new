@@ -77,7 +77,7 @@ export default function App() {
   if (!cur)
     return (
       <>
-        <Login onLogin={setCur} onSetup={() => setShowSetup(true)} onChangelog={() => setChangelogOpen(true)} />
+        <Login onLogin={setCur} onChangelog={() => setChangelogOpen(true)} />
         <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </>
     );

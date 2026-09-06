@@ -1,15 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Boxes, CheckCircle2, History, LogIn } from "lucide-react";
-import { getDB, hasWorkspace } from "../lib/store";
+import { getDB } from "../lib/store";
 import { signIn } from "../lib/production";
 import { Btn, Field, toast } from "../components/ui";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
 import type { User } from "../types";
 
-export default function Login({ onLogin, onSetup, onChangelog }: { onLogin: (u: User) => void; onSetup: () => void; onChangelog: () => void }) {
+export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => void; onChangelog: () => void }) {
   const db = getDB();
-  const workspaceExists = hasWorkspace();
   const t = useT();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -72,12 +71,6 @@ export default function Login({ onLogin, onSetup, onChangelog }: { onLogin: (u: 
         </Btn>
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">Supabase Auth · role-based access</p>
       </form>
-
-      {!workspaceExists && (
-        <button onClick={onSetup} className="tap mx-auto mt-4 block font-mono text-[10.5px] uppercase tracking-widest text-faint hover:text-amber">
-          First-time setup · create administrator
-        </button>
-      )}
 
       <button onClick={onChangelog}
         className="tap mx-auto mt-6 inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-widest text-faint hover:text-amber">
