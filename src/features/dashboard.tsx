@@ -9,6 +9,7 @@ import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../typ
 import { getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName, refreshProductionData } from "../lib/store";
 import { completePiketRemote } from "../lib/production";
 import { punchAttendance, todayAttendance } from "../lib/production";
+import { isClockInLate, isClockOutEarly, getTimeFromISO } from "../lib/shifts";
 import { copyText, fmtClock, fmtDate, fmtDateLong, fmtTime, haversineM, hoursBetween, locateWithFallback, qrMatrix, randInt, relTime, todayKey, vibrate, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { CaptureSheet } from "../components/capture";
@@ -573,9 +574,16 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
       setStage("result");
       return;
     }
+    
+    // Calculate shift-aware late/early status
+    const now = new Date();
+    const currentTimeStr = getTimeFromISO(now.toISOString());
+    const late = kind === "in" ? isClockInLate(user, db.settings, currentTimeStr) : false;
+    const early = kind === "out" ? isClockOutEarly(user, db.settings, currentTimeStr) : false;
+    
     let punched: Attendance;
     try {
-      punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late: false, early: false, score, distance: gps.dist, method });
+      punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late, early, score, distance: gps.dist, method });
       setRemoteRec(punched);
       setResult({ ok: true, kind, score, dist: gps.dist, method, rec: punched });
     } catch (error) {
@@ -586,7 +594,7 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
     onDone();
     vibrate(kind === "in" ? [40, 60, 90] : [40, 60, 40]);
     confetti({ particleCount: kind === "in" ? 90 : 60, spread: 75, origin: { y: 0.65 }, colors: ["#ffb224", "#3ed598", "#5ac8e8", "#e8edf3"], disableForReducedMotion: true });
-    toast(kind === "in" ? `${t("f.checkedIn")} · ${fmtTime(punched.checkIn)}` : `${t("f.checkedOut")}`, "ok");
+    toast(kind === "in" ? `${t("f.checkedIn")} · ${fmtTime(punched.checkIn)}${late ? " ⚠️ LATE" : ""}` : `${t("f.checkedOut")}${early ? " ⚠️ EARLY" : ""}`, "ok");
   };
 
   const doSelfReport = () => {

@@ -8,6 +8,7 @@ import { createLeaveRequest, setNotificationPreferenceRemote, signOut } from "..
 import { refreshProductionData } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { getShiftWindow, getShiftStatusTone } from "../lib/shifts";
 import { VERSION } from "../lib/changelog";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, StatusBadge, Toggle, toast } from "../components/ui";
 import { FeedbackSheet } from "./feedback";
@@ -151,6 +152,28 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           </div>
         </div>
       </div>
+
+      {/* shift status card */}
+      {db && (
+        <div className={`card p-4 border-l-4 ${getShiftStatusTone(user, db.settings) === "bad" ? "border-l-bad bg-bad/5" : getShiftStatusTone(user, db.settings) === "amber" ? "border-l-amber bg-amber/5" : "border-l-ok bg-ok/5"}`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="ttl text-[13px] font-bold text-ink">⏰ Your Shift</p>
+              <p className="mt-0.5 font-mono text-[14px] font-semibold text-ink">{getShiftWindow(user, db.settings)}</p>
+              <p className="mt-1 font-mono text-[10.5px] text-faint">
+                {user.shiftStart 
+                  ? `Custom shift · ${user.shiftEnd ? "Fixed window" : "Auto-end +9h"}`
+                  : `Workspace default · Clock in after ${db.settings.lateTime}`}
+              </p>
+            </div>
+            {user.shiftStart && (
+              <Chip tone={getShiftStatusTone(user, db.settings)} className="shrink-0">
+                {user.shiftStart ? "Custom" : "Default"}
+              </Chip>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* leave */}
       <div className="card flex items-center gap-3 p-4">

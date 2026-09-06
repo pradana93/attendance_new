@@ -12,6 +12,7 @@ import {
 } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { getShiftWindow, getShiftStatusTone } from "../lib/shifts";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
@@ -216,7 +217,7 @@ function LiveBoard() {
                       {r.selfReport && <Chip tone="amber">self-report</Chip>}
                     </div>
                     <p className="mt-0.5 font-mono text-[11px] text-faint">
-                      {u.department} · in {fmtTime(r.checkIn)}{r.checkOut ? ` · out ${fmtTime(r.checkOut)}` : " · on floor"}
+                      {u.department} · {getShiftWindow(u, db.settings)} · in {fmtTime(r.checkIn)}{r.checkOut ? ` · out ${fmtTime(r.checkOut)}` : " · on floor"}
                       {r.distance ? ` · ${r.distance}m` : ""}
                     </p>
                   </div>
@@ -950,6 +951,23 @@ function ConfigPanel() {
             <input className="inp w-full font-mono" type="number" step={1000} min={0} value={s.otRate} onChange={(e) => updateSettings({ otRate: Math.max(0, Number(e.target.value)) })} />
           </Field>
         </div>
+
+        <div className="border-t border-line2 pt-4">
+          <p className="ttl text-[12px] font-bold text-ink mb-3">⏰ Shift Creator Settings</p>
+          <div className="space-y-3">
+            <Field label="Default Shift Duration (hours)" hint="When only start time is set">
+              <input className="inp w-full font-mono" type="number" step={0.5} min={1} max={16} defaultValue={9} placeholder="9" />
+            </Field>
+            <Field label="OT Alert Threshold (minutes)" hint="Notify staff if working N minutes past shift">
+              <input className="inp w-full font-mono" type="number" step={5} min={0} max={180} defaultValue={30} placeholder="30" />
+            </Field>
+            <div className="flex items-center gap-2.5">
+              <input type="checkbox" id="autoLogOT" defaultChecked={false} className="w-4 h-4 accent-amber" />
+              <label htmlFor="autoLogOT" className="text-[12.5px] font-medium text-ink cursor-pointer">Auto-log OT if working more than 60 minutes past shift</label>
+            </div>
+          </div>
+        </div>
+
         <p className="font-mono text-[10.5px] text-faint">ℹ {t("a.piketPtsHint")}</p>
       </div>
 

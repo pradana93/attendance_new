@@ -8,6 +8,7 @@ import { cancelOvertimeRequest, createOvertimeRequest, decideOvertimeRequest } f
 import { refreshProductionData } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDR, fmtIDRFull, hoursBetween, relTime, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { getShiftEnd, calculateOvertimeMinutes, getTimeFromISO } from "../lib/shifts";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, Reveal, SectionTitle, Seg, Sheet, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
 
@@ -248,23 +249,49 @@ function NewRequest({ user, open, onClose }: { user: User; open: boolean; onClos
   const db = getDB();
   const t = useT();
   const [date, setDate] = useState(todayKey());
-  const [start, setStart] = useState("17:00");
+  const [start, setStart] = useState(() => db ? getShiftEnd(user, db.settings) : "17:00");
   const [end, setEnd] = useState("19:00");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
+  
   if (!db) return null;
+  
+  // Update start time when user or date changes (shift-aware)
+  const suggestedStart = getShiftEnd(user, db.settings);
+  const handleSetDate = (newDate: string) => {
+    setDate(newDate);
+    // Auto-suggest shift end as OT start when date changes
+    setStart(suggestedStart);
+  };
+  
   const h = hoursBetween(start, end);
   const overlap = db.ot.some((o) => o.userId === user.id && o.date === date && o.status !== "rejected" && !(end <= o.start || start >= o.end));
   const rate = db.settings.otRate;
+  
+  // Check if staff actually worked overtime today (if date is today)
+  const todayRec = date === todayKey() ? db.attendance.find((a) => a.userId === user.id && a.date === date && a.checkOut) : null;
+  const actualOTMinutes = todayRec ? calculateOvertimeMinutes(user, db.settings, getTimeFromISO(todayRec.checkOut!)) : 0;
+  const showOTDetected = actualOTMinutes > 0 && date === todayKey();
 
   return (
     <Sheet open={open} onClose={onClose} title={t("o.newRequest")}>
       <div className="space-y-3.5">
-        <Field label={t("o.date")}><input className="inp font-mono" type="date" value={date} max={todayKey()} onChange={(e) => e.target.value && setDate(e.target.value)} /></Field>
+        <Field label={t("o.date")}><input className="inp font-mono" type="date" value={date} max={todayKey()} onChange={(e) => e.target.value && handleSetDate(e.target.value)} /></Field>
+        
+        {showOTDetected && (
+          <div className="flex items-center gap-2 rounded-xl border border-cool/35 bg-cool/8 px-3.5 py-2.5">
+            <Timer size={13} className="shrink-0 text-cool" />
+            <p className="text-[12px] text-ink">💡 Auto-detected: You worked {Math.round(actualOTMinutes)} min past shift (after {suggestedStart})</p>
+          </div>
+        )}
+        
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t("o.start")}><input className="inp font-mono" type="time" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} /></Field>
+          <Field label={t("o.start")}>
+            <input className="inp font-mono" type="time" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
+            <p className="mt-1 text-[10px] text-faint">💡 Default: your shift end ({suggestedStart})</p>
+          </Field>
           <Field label={t("o.end")}><input className="inp font-mono" type="time" value={end} onChange={(e) => e.target.value && setEnd(e.target.value)} /></Field>
         </div>
         <Field label={t("o.reason")}><textarea className="inp min-h-[64px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Container unloading overflow…" /></Field>
