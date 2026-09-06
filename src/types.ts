@@ -95,6 +95,10 @@ export interface PointEvent {
   date: string;
   delta: number;
   label: string;
+  reason?: string;
+  source?: "auto" | "manual";
+  adminId?: string;
+  category?: "attendance" | "piket" | "initiative" | "quality" | "bonus" | "discipline" | "reward";
 }
 
 export interface RedeemItem {

@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import type { Lang, Role, User } from "../types";
 import {
-  addAnnouncement, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
+  addAnnouncement, addPointEvent, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
   getDB, manualLog, rerunSetup, reviewSelfReport,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
@@ -22,7 +22,7 @@ import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, u
 import { refreshProductionData } from "../lib/store";
 import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
-export type AdminSec = "live" | "staff" | "notice" | "photos" | "feedback" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "cloud" | "config";
 type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
@@ -44,13 +44,14 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         className="no-scrollbar overflow-x-auto [&>button]:shrink-0"
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
-          { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
         ]}
         value={sec} onChange={setSec}
       />
       {sec === "live" && <LiveBoard />}
       {sec === "staff" && <StaffPanel admin={user} />}
       {sec === "notice" && <NoticePanel admin={user} />}
+      {sec === "points" && <PointsPanel admin={user} />}
       {sec === "photos" && <PhotosPanel />}
       {sec === "feedback" && <FeedbackInbox admin={user} />}
       {sec === "cloud" && <CloudPanel />}
@@ -818,6 +819,95 @@ function ConfigPanel() {
       <Confirm open={confirmSetup} onClose={() => setConfirmSetup(false)} danger
         title={t("a.rerunQ")} body={t("a.rerunBody")} yesLabel={t("a.wipe")} onYes={() => rerunSetup()} />
       <GeofenceStudio open={geofenceOpen} onClose={() => setGeofenceOpen(false)} />
+    </div>
+  );
+}
+
+/* ---------------- manual points ---------------- */
+function PointsPanel({ admin }: { admin: User }) {
+  const db = getDB();
+  const t = useT();
+  const [targetUser, setTargetUser] = useState("");
+  const [delta, setDelta] = useState(5);
+  const [label, setLabel] = useState("");
+  const [reason, setReason] = useState("");
+  const [category, setCategory] = useState<NonNullable<import("../types").PointEvent["category"]>>("bonus");
+  if (!db) return null;
+  const staff = db.users.filter((u) => u.active);
+  const selected = db.users.find((u) => u.id === targetUser);
+  const recent = db.pointEvents.slice(0, 12);
+
+  return (
+    <div className="a-fadein space-y-3">
+      <div className="card p-4 space-y-3">
+        <div>
+          <p className="ttl text-[15px] font-bold text-ink">Manual point adjustment</p>
+          <p className="font-mono text-[10.5px] text-faint">Reward staff, correct mistakes, and keep the reason in the ledger.</p>
+        </div>
+
+        <Field label="Staff user">
+          <select className="inp" value={targetUser} onChange={(e) => setTargetUser(e.target.value)}>
+            <option value="">Select staff</option>
+            {staff.map((u) => (
+              <option key={u.id} value={u.id}>{u.name} · {u.department}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Points (+ / -)"><input className="inp font-mono" type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} /></Field>
+          <Field label="Category">
+            <select className="inp" value={category} onChange={(e) => setCategory(e.target.value as typeof category)}>
+              <option value="attendance">Attendance</option>
+              <option value="piket">Piket</option>
+              <option value="initiative">Initiative</option>
+              <option value="quality">Quality</option>
+              <option value="bonus">Bonus</option>
+              <option value="discipline">Discipline</option>
+              <option value="reward">Reward</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Label"><input className="inp" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Excellent problem report" /></Field>
+        <Field label="Reason"><textarea className="inp min-h-[72px] resize-none" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this adjustment is being made" /></Field>
+
+        <Btn className="w-full" onClick={async () => {
+          if (!targetUser) { toast("Select a staff user", "err"); return; }
+          if (!label.trim() || !reason.trim()) { toast("Label and reason are required", "err"); return; }
+          if (!delta || Number.isNaN(delta)) { toast("Points cannot be zero", "err"); return; }
+          const result = addPointEvent({ userId: targetUser, delta, label: label.trim(), reason: reason.trim(), adminId: admin.id, category });
+          if (!result.ok) { toast(result.msg, "err"); return; }
+          await refreshProductionData();
+          toast(result.msg, "ok");
+          setLabel("");
+          setReason("");
+          setDelta(5);
+        }}><Plus size={15} /> Save point event</Btn>
+
+        {selected && <p className="font-mono text-[10.5px] text-faint">Target: {selected.name} · current balance {selected.points} pts</p>}
+      </div>
+
+      <div className="card p-4">
+        <SectionTitle>Recent point activity</SectionTitle>
+        <div className="space-y-2">
+          {recent.map((p) => {
+            const u = db.users.find((x) => x.id === p.userId);
+            return (
+              <div key={p.id} className="card2 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-ink">{p.label}</p>
+                    <p className="font-mono text-[10.5px] text-faint">{u?.name ?? p.userId} · {p.source ?? "auto"}{p.category ? ` · ${p.category}` : ""}</p>
+                    {p.reason && <p className="mt-0.5 text-[11.5px] leading-relaxed text-mut">{p.reason}</p>}
+                  </div>
+                  <span className={`font-mono text-[13px] font-semibold ${p.delta > 0 ? "text-ok" : "text-bad"}`}>{p.delta > 0 ? "+" : ""}{p.delta}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
