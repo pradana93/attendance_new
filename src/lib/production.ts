@@ -348,6 +348,20 @@ export async function addRewardItemRemote(input: { name: string; cost: number; s
   if (error) throw new Error(error.message);
 }
 
+export async function saveRewardItemRemote(id: string, input: { name: string; cost: number; stock: number; cat: RedeemItem["cat"] }): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("reward_items").update({ name: input.name, cost: input.cost, stock: input.stock, category: input.cat }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteRewardItemRemote(id: string): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("reward_items").update({ active: false }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function rotateTemplateRemote(): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");

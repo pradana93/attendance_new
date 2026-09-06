@@ -13,7 +13,7 @@ import { addDays, dayKey, fmtDate, mondayOf, parseKey, todayKey, vibrate } from 
 import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { CaptureSheet, Lightbox } from "../components/capture";
-import { addRewardItemRemote, completePiketRemote, createSwapRequest, decideSwapRequest, deleteTaskRemote, redeemRewardRemote, rotateTemplateRemote, saveTaskRemote, setAssignmentRemote } from "../lib/production";
+import { addRewardItemRemote, saveRewardItemRemote, deleteRewardItemRemote, completePiketRemote, createSwapRequest, decideSwapRequest, deleteTaskRemote, redeemRewardRemote, rotateTemplateRemote, saveTaskRemote, setAssignmentRemote } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 
 const AREAS = ["Depan", "Tengah", "Belakang", "Gudang", "Umum"];
@@ -551,6 +551,7 @@ function Redeem({ user }: { user: User }) {
   const t = useT();
   const [target, setTarget] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ id: string; name: string; cost: number; stock: number; cat: RedeemItem["cat"] } | null>(null);
   const [nName, setNName] = useState(""); const [nCost, setNCost] = useState(100); const [nStock, setNStock] = useState(10);
   const [nCat, setNCat] = useState<"Essentials" | "Voucher" | "Gear">("Essentials");
   if (!db) return null;
@@ -573,7 +574,14 @@ function Redeem({ user }: { user: User }) {
     <div className="a-fadein space-y-3">
       <div className="flex items-center justify-between">
         <p className="font-mono text-[12px] text-mut">{t("p.balance")}: <span className="font-semibold text-amber">{user.points} {t("c.pts")}</span></p>
-        {isAdmin && <Btn variant="ghost" className="!px-3 !py-1.5 text-[12px]" onClick={() => setShowAdd(true)}><Plus size={13} /> {t("p.addTask").split(" ")[0]}</Btn>}
+        {isAdmin && (
+          <Btn variant="ghost" className="!px-3 !py-1.5 text-[12px]" onClick={() => {
+            setNName(""); setNCost(100); setNStock(10); setNCat("Essentials");
+            setShowAdd(true);
+          }}>
+            <Plus size={13} /> Reward
+          </Btn>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -582,10 +590,17 @@ function Redeem({ user }: { user: User }) {
           const afford = user.points >= i.cost;
           const out = i.stock <= 0;
           return (
-            <div key={i.id} className={`card p-3.5 ${out ? "opacity-55" : ""}`}>
+            <div key={i.id} className={`card relative p-3.5 ${out ? "opacity-55" : ""}`}>
+              {isAdmin && (
+                <button onClick={() => {
+                  setEditingItem({ id: i.id, name: i.name, cost: i.cost, stock: i.stock, cat: i.cat });
+                }} className="absolute top-2.5 right-2.5 tap flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel2 text-faint hover:text-ink">
+                  <Pencil size={11} />
+                </button>
+              )}
               <div className="flex items-start justify-between">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber/12 text-amber"><Ic size={17} /></span>
-                <Chip tone="mut">{i.cat}</Chip>
+                <Chip tone="mut" className={isAdmin ? "mr-6" : ""}>{i.cat}</Chip>
               </div>
               <p className="mt-2 text-[13.5px] font-semibold leading-tight text-ink">{i.name}</p>
               <p className="mt-0.5 font-mono text-[10.5px] text-faint">{i.stock} {t("p.inStock")}</p>
@@ -661,6 +676,56 @@ function Redeem({ user }: { user: User }) {
             catch (error) { toast(error instanceof Error ? error.message : "Could not add reward", "err"); }
           }}><Plus size={15} /> {t("p.addToCatalog")}</Btn>
         </div>
+      </Sheet>
+
+      <Sheet open={!!editingItem} onClose={() => setEditingItem(null)} title="Edit Reward Item">
+        {editingItem && (
+          <div className="space-y-3.5">
+            <Field label={t("p.name")}>
+              <input className="inp" value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} placeholder="Rain jacket" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("p.cost")}>
+                <input className="inp font-mono" type="number" value={editingItem.cost} onChange={(e) => setEditingItem({ ...editingItem, cost: Number(e.target.value) })} />
+              </Field>
+              <Field label={t("p.stock")}>
+                <input className="inp font-mono" type="number" value={editingItem.stock} onChange={(e) => setEditingItem({ ...editingItem, stock: Number(e.target.value) })} />
+              </Field>
+            </div>
+            <Field label={t("p.category")}>
+              <div className="flex gap-2">
+                {(["Essentials", "Voucher", "Gear"] as const).map((c) => (
+                  <button key={c} onClick={() => setEditingItem({ ...editingItem, cat: c })} className={`tap ttl flex-1 rounded-lg border px-2 py-2 text-[12px] font-bold ${editingItem.cat === c ? "border-amber/60 bg-amber/12 text-amber" : "border-line bg-panel2 text-mut"}`}>{c}</button>
+                ))}
+              </div>
+            </Field>
+            <div className="flex flex-col gap-2 pt-2">
+              <Btn className="w-full" onClick={async () => {
+                if (!editingItem.name.trim() || editingItem.cost <= 0) { toast("Name and positive cost required", "err"); return; }
+                try {
+                  await saveRewardItemRemote(editingItem.id, { name: editingItem.name.trim(), cost: editingItem.cost, stock: editingItem.stock, cat: editingItem.cat });
+                  await refreshProductionData();
+                  toast(`${editingItem.name.trim()} updated`);
+                  setEditingItem(null);
+                } catch (error) {
+                  toast(error instanceof Error ? error.message : "Could not update reward", "err");
+                }
+              }}><Check size={15} /> Save Changes</Btn>
+              <Btn variant="ghost" className="w-full text-bad hover:bg-bad/5" onClick={async () => {
+                if (confirm(`Are you sure you want to remove ${editingItem.name}?`)) {
+                  try {
+                    await deleteRewardItemRemote(editingItem.id);
+                    await refreshProductionData();
+                    toast(`${editingItem.name} removed`);
+                    setEditingItem(null);
+                  } catch (error) {
+                    toast(error instanceof Error ? error.message : "Could not remove reward", "err");
+                  }
+                }
+              }}><Trash2 size={14} className="text-bad" /> Remove Item</Btn>
+            </div>
+          </div>
+        )}
       </Sheet>
 
     </div>

@@ -17,6 +17,13 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.2.2", date: new Date().toISOString().slice(0, 10), name: "Piket Rewards Full CRUD Control",
+    items: [
+      { tag: "new", text: "Added administrative controls to Add, Edit, Update, and soft-remove (Retire) individual reward catalog items directly from the Piket Rewards tab." },
+      { tag: "improved", text: "Introduced inline pencil edit button on active reward entries visible exclusively to administrators." }
+    ],
+  },
+  {
     version: "2.2.1", date: new Date().toISOString().slice(0, 10), name: "Header & Security Upgrades",
     items: [
       { tag: "improved", text: "Expanded connection status visibility in the header for improved legibility across mobile viewports." },
