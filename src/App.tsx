@@ -15,7 +15,7 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, hasProductionConfiguration, markNotificationRead, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
+import { currentProductionUser, hasProductionConfiguration, markNotificationRead, productionClient, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
 import { TutorialOverlay, type TutorialTarget } from "./features/tutorial";
 
 initStore();
@@ -54,19 +54,37 @@ export default function App() {
   useEffect(() => {
     if (!cloudReady) { setAuthChecking(false); return; }
     setAuthChecking(true);
-    currentProductionUser().then(async (next) => {
+    let cancelled = false;
+
+    const hydrateFromCloud = async () => {
+      const next = await currentProductionUser();
+      if (cancelled) return;
       if (next) {
         const remoteSettings = await workspaceSettings();
-        if (remoteSettings) updateSettings(remoteSettings);
-        await refreshProductionData();
+        if (remoteSettings && !cancelled) updateSettings(remoteSettings);
+        if (!cancelled) await refreshProductionData();
       }
-      setCur(next);
-    }).finally(() => setAuthChecking(false));
-  }, [cloudReady]);
+      if (!cancelled) setCur(next);
+      if (!cancelled) setAuthChecking(false);
+    };
 
-  useEffect(() => {
-    if (!cloudReady) return;
-    void refreshProductionData();
+    void hydrateFromCloud();
+
+    const client = productionClient();
+    const { data: authSub } = client?.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (!session?.user) {
+        setCur(null);
+        setAuthChecking(false);
+        return;
+      }
+      void hydrateFromCloud();
+    }) ?? { data: null };
+
+    return () => {
+      cancelled = true;
+      authSub?.subscription.unsubscribe();
+    };
   }, [cloudReady]);
 
   useEffect(() => {
