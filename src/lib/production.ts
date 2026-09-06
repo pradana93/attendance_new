@@ -44,7 +44,8 @@ let runtimeUrl = configuredUrl;
 let runtimeKey = configuredKey;
 
 export function productionClient(): SupabaseClient | null {
-  if (getSupabase()) return getSupabase();
+  const existing = getSupabase();
+  if (existing) return existing;
   if (!runtimeUrl || !runtimeKey) return null;
   return initSupabase(runtimeUrl, runtimeKey) as SupabaseClient;
 }
@@ -56,6 +57,7 @@ export function hasProductionConfiguration(): boolean {
 export function configureProduction(url: string, key: string): void {
   runtimeUrl = url;
   runtimeKey = key;
+  clearSupabase();
   initSupabase(url, key);
 }
 

@@ -37,6 +37,9 @@ Deno.serve(async (request) => {
   if (!body.name?.trim() || !body.email?.includes("@") || !body.password || body.password.length < 8) {
     return json({ error: "Name, valid email, and an 8-character password are required" }, 400);
   }
+  if (!body.employeeId?.trim() || !body.department?.trim()) {
+    return json({ error: "Employee ID and department are required" }, 400);
+  }
   if (body.role === "admin" && callerProfile.role !== "superadmin") return json({ error: "Only Super Admin can create admins" }, 403);
 
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
