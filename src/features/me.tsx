@@ -35,6 +35,16 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
     const activeTimers = notif.loadActiveReminders();
     setNotifEnabled(activeTimers.length > 0 || notifPermission === 'granted');
   }, [db?.settings.lateTime, notifPermission, user.id, user.name]);
+
+  useEffect(() => {
+    if (notifPermission !== "granted" || reminders.length === 0) return;
+    const enabled = reminders.filter((item) => item.enabled);
+    if (enabled.length === 0) return;
+    notif.clearAllReminders(notif.loadActiveReminders());
+    const timers = notif.scheduleAllPresets(enabled);
+    notif.saveActiveReminders(timers);
+    setNotifEnabled(true);
+  }, [notifPermission, reminders]);
   
   if (!db) return null;
   const s = db.settings;
@@ -98,6 +108,11 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
     setReminders(next);
     const enabled = next.filter((item) => item.enabled);
     notif.saveReminderPresets(user.id, next);
+    if (notifPermission !== "granted") {
+      setNotifEnabled(enabled.length > 0);
+      return;
+    }
+    notif.clearAllReminders(notif.loadActiveReminders());
     const timers = notif.scheduleAllPresets(enabled);
     notif.saveActiveReminders(timers);
     setNotifEnabled(timers.length > 0);
@@ -186,7 +201,20 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
                 <p className="truncate text-[13px] font-semibold text-ink">{item.title}</p>
                 <p className="font-mono text-[10.5px] text-faint">{item.time ?? "custom"} · {item.repeatDaily ? "daily" : "one-time"}</p>
               </div>
-              <Toggle on={item.enabled} onChange={(enabled) => saveReminder(notif.toggleReminderPreset(user.id, item.id, enabled))} />
+              <div className="flex items-center gap-2">
+                <Toggle on={item.enabled} onChange={(enabled) => saveReminder(notif.toggleReminderPreset(user.id, item.id, enabled))} />
+                <button
+                  onClick={() => {
+                    const next = notif.removeReminderPreset(user.id, item.id);
+                    saveReminder(next);
+                    toast("Reminder removed", "info");
+                  }}
+                  className="tap rounded-lg border border-line bg-panel2 p-2 text-faint hover:border-bad/40 hover:text-bad"
+                  aria-label={`Remove ${item.title}`}
+                >
+                  <X size={13} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -198,6 +226,13 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           <Field label="Time"><input className="inp font-mono" type="time" value={customTime} onChange={(e) => setCustomTime(e.target.value)} /></Field>
           <Btn className="w-full" onClick={() => {
             if (!customTitle.trim()) { toast("Reminder title required", "err"); return; }
+            void (async () => {
+              const granted = notifPermission === "granted" ? true : await notif.requestPermission();
+              if (!granted) {
+                toast(t("n.permissionBody"), "err");
+                return;
+              }
+              setNotifPermission("granted");
             const next = notif.upsertReminderPreset(user.id, {
               id: `custom-${Date.now()}`,
               kind: 'custom',
@@ -211,6 +246,7 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
             setCustomTitle("");
             setCustomBody("");
             toast("Custom reminder added", "ok");
+            })();
           }}><AlarmClock size={14} /> Add reminder</Btn>
         </div>
       </div>
