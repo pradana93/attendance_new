@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock,
+  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock, X,
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
