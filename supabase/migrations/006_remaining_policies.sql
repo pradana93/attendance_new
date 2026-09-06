@@ -12,3 +12,12 @@ drop policy if exists leave_admin_write on public.leave_requests;
 create policy leave_admin_write on public.leave_requests for update
   using (public.is_workspace_admin(workspace_id))
   with check (public.is_workspace_admin(workspace_id));
+
+drop policy if exists point_events_admin_insert on public.point_events;
+create policy point_events_admin_insert on public.point_events for insert
+  with check (
+    public.is_workspace_admin(workspace_id)
+    and reason is not null
+    and btrim(reason) <> ''
+    and source in ('auto', 'manual')
+  );

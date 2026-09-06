@@ -71,6 +71,10 @@ create table if not exists public.point_events (
   event_date date not null default current_date,
   delta integer not null,
   label text not null,
+  reason text,
+  source text not null default 'auto' check (source in ('auto', 'manual')),
+  admin_id uuid references public.profiles(id),
+  category text not null default 'bonus' check (category in ('attendance', 'piket', 'initiative', 'quality', 'bonus', 'discipline', 'reward')),
   created_at timestamptz not null default now()
 );
 
