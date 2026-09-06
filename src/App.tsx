@@ -34,6 +34,10 @@ type Tab = "home" | "piket" | "stats" | "ot" | "fifth";
 interface NavState { tab: Tab; sec: AdminSec }
 const navUrl = (s: NavState) => `#/${s.tab}${s.sec !== "live" ? "/" + s.sec : ""}`;
 
+function shellTabLabel(isAdmin: boolean): string {
+  return isAdmin ? "Admin" : "Me";
+}
+
 export default function App() {
   const db = useDB();
   const [booting, setBooting] = useState(true);
@@ -207,7 +211,7 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
     { id: "piket" as Tab, icon: CalendarDays, label: t("nav.piket") },
     { id: "stats" as Tab, icon: BarChart3, label: t("nav.stats") },
     { id: "ot" as Tab, icon: ClockMini, label: t("nav.ot") },
-    { id: "fifth" as Tab, icon: isAdmin ? Settings2 : UserIcon, label: isAdmin ? t("nav.admin") : t("nav.me") },
+    { id: "fifth" as Tab, icon: isAdmin ? Settings2 : UserIcon, label: shellTabLabel(isAdmin) },
   ];
 
   return (

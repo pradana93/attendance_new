@@ -52,6 +52,7 @@ export function YtdBars({ data }: { data: { label: string; value: number; curren
           const y = H - padB - h;
           return (
             <g key={i} onClick={() => setSel(sel === i ? null : i)} className="cursor-pointer">
+              <title>{`${d.label}: ${d.value}% attendance${d.current ? " · current" : ""}`}</title>
               <rect x={i * bw} y={0} width={bw} height={H - padB} fill={sel === i ? "var(--line2)" : "transparent"} opacity={0.5} rx={4} />
               <rect x={x} y={y} width={bw * 0.56} height={h} rx={3}
                 fill={d.current ? "var(--amber)" : sel === i ? "var(--cool)" : "var(--line)"}
@@ -101,7 +102,7 @@ export function Heatmap({ heat, monthLabel }: { heat: { key: string; status: Day
             onClick={() => h.status !== "future" && setSel(sel === h.key ? null : h.key)}
             className={`aspect-square rounded-[5px] border transition-transform ${sel === h.key ? "scale-110 border-ink/60" : "border-transparent"} ${h.status === "future" ? "border-dashed border-line2" : ""}`}
             style={{ background: HEAT_COLOR[h.status], opacity: h.status === "off" ? 0.7 : h.status === "present" ? 0.85 : 1 }}
-            aria-label={h.key}
+            aria-label={`${h.key} · ${h.status}${h.hours ? ` · ${h.hours}h` : ""}`}
           />
         ))}
       </div>

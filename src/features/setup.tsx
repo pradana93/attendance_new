@@ -162,7 +162,7 @@ export default function SetupWizard() {
               </svg>
               <p className="relative z-10 mt-24 font-mono text-[10.5px] text-mut">{lat.toFixed(4)}, {lng.toFixed(4)} · r={radius}m</p>
             </div>
-            <Field label="Warehouse / site name">
+            <Field label="Warehouse / site name" hint="This is the name staff will see after sign-in.">
               <input className="inp" value={siteName} onChange={(e) => setSiteName(e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -193,7 +193,7 @@ export default function SetupWizard() {
             {err && <p className="a-shake rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-[12.5px] text-bad">{err}</p>}
             <div className="card2 flex items-center gap-2.5 px-3.5 py-3">
               <Fingerprint size={16} className="shrink-0 text-cool" />
-              <p className="text-[12px] leading-relaxed text-mut">Your workspace starts empty. Add staff accounts after setup, then configure the live Supabase data layer.</p>
+              <p className="text-[12px] leading-relaxed text-mut">Your workspace starts empty. You can add staff right after setup, then connect the live Supabase data layer when ready.</p>
             </div>
           </div>
         )}
