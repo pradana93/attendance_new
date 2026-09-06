@@ -24,12 +24,17 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(notif.getPermission());
+  const [reminders, setReminders] = useState<notif.ReminderPreset[]>([]);
+  const [customTitle, setCustomTitle] = useState("");
+  const [customBody, setCustomBody] = useState("");
+  const [customTime, setCustomTime] = useState("08:00");
   
   useEffect(() => {
-    // Check if reminders are enabled on mount
+    const seeded = notif.mergeReminderPresets(user.id, notif.defaultReminderPresets(user.name, db?.settings.lateTime ?? "08:00"));
+    setReminders(seeded);
     const activeTimers = notif.loadActiveReminders();
     setNotifEnabled(activeTimers.length > 0 || notifPermission === 'granted');
-  }, [notifPermission]);
+  }, [db?.settings.lateTime, notifPermission, user.id, user.name]);
   
   if (!db) return null;
   const s = db.settings;
@@ -51,47 +56,51 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
         return;
       }
       setNotifPermission('granted');
-      
-      // Schedule clock-in reminder
-      const clockInTime = notif.getNextClockInTime(s.lateTime);
-      notif.scheduleReminder({
-        id: `clockin-${user.id}`,
-        type: 'clock_in',
-        title: t("n.clockIn"),
-        body: notif.getClockInMessage(user.name, s.lateTime),
-        scheduledAt: clockInTime.getTime(),
-        repeatDaily: true,
-      });
-      
-      // Schedule clock-out reminder
-      const clockOutTime = notif.getNextClockOutTime(s.lateTime);
-      notif.scheduleReminder({
-        id: `clockout-${user.id}`,
-        type: 'clock_out',
-        title: t("n.clockOut"),
-        body: notif.getClockOutMessage(),
-        scheduledAt: clockOutTime.getTime(),
-        repeatDaily: true,
-      });
-      
-      // Schedule piket reminder if user has duty today
-      const myPiketToday = db.template.filter((a) => a.day === new Date().getDay() && a.userId === user.id);
-      if (myPiketToday.length > 0) {
-        const piketTime = notif.getNextPiketTime();
-        const taskNames = myPiketToday.map((a) => db.tasks.find((t) => t.id === a.taskId)?.name || '').filter(Boolean).join(', ');
-        notif.scheduleReminder({
-          id: `piket-${user.id}`,
-          type: 'piket',
+      const next = notif.mergeReminderPresets(user.id, [
+        {
+          id: `attendance-clock-in-${user.id}`,
+          kind: 'clock_in',
+          title: t("n.clockIn"),
+          body: notif.getClockInMessage(user.name, s.lateTime),
+          enabled: true,
+          time: s.lateTime,
+          repeatDaily: true,
+          days: [1, 2, 3, 4, 5, 6],
+        },
+        {
+          id: `attendance-clock-out-${user.id}`,
+          kind: 'clock_out',
+          title: t("n.clockOut"),
+          body: notif.getClockOutMessage(),
+          enabled: true,
+          time: notif.defaultReminderPresets(user.name, s.lateTime)[1].time,
+          repeatDaily: true,
+          days: [1, 2, 3, 4, 5, 6],
+        },
+        {
+          id: `piket-reminder-${user.id}`,
+          kind: 'piket',
           title: t("n.piket"),
-          body: notif.getPiketMessage(taskNames),
-          scheduledAt: piketTime.getTime(),
+          body: 'Check your assigned piket duty and complete proof if required.',
+          enabled: true,
+          time: '17:00',
           repeatDaily: false,
-        });
-      }
-      
-      setNotifEnabled(true);
+          days: [1, 2, 3, 4, 5, 6],
+        },
+        ...reminders.filter((item) => item.kind === 'custom'),
+      ]);
+      saveReminder(next);
       toast(t("n.scheduled"), "ok");
     }
+  };
+
+  const saveReminder = (next: notif.ReminderPreset[]) => {
+    setReminders(next);
+    const enabled = next.filter((item) => item.enabled);
+    notif.saveReminderPresets(user.id, next);
+    const timers = notif.scheduleAllPresets(enabled);
+    notif.saveActiveReminders(timers);
+    setNotifEnabled(timers.length > 0);
   };
 
   return (
@@ -159,6 +168,51 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           </p>
         </div>
         <Toggle on={notifEnabled} onChange={handleToggleReminders} />
+      </div>
+
+      <div className="card space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="ttl text-[13px] font-bold text-ink">{t("n.title")}</p>
+            <p className="font-mono text-[10.5px] text-faint">Daily attendance, piket, and custom reminders</p>
+          </div>
+          <Chip tone="cool">{reminders.filter((item) => item.enabled).length} active</Chip>
+        </div>
+
+        <div className="space-y-2">
+          {reminders.map((item) => (
+            <div key={item.id} className="card2 flex items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-ink">{item.title}</p>
+                <p className="font-mono text-[10.5px] text-faint">{item.time ?? "custom"} · {item.repeatDaily ? "daily" : "one-time"}</p>
+              </div>
+              <Toggle on={item.enabled} onChange={(enabled) => saveReminder(notif.toggleReminderPreset(user.id, item.id, enabled))} />
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-line2 pt-3 space-y-3">
+          <p className="ttl text-[11px] font-bold text-faint">Add other reminder</p>
+          <Field label="Reminder title"><input className="inp" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder="Medicine, meeting, pickup" /></Field>
+          <Field label="Message"><input className="inp" value={customBody} onChange={(e) => setCustomBody(e.target.value)} placeholder="Short note for the reminder" /></Field>
+          <Field label="Time"><input className="inp font-mono" type="time" value={customTime} onChange={(e) => setCustomTime(e.target.value)} /></Field>
+          <Btn className="w-full" onClick={() => {
+            if (!customTitle.trim()) { toast("Reminder title required", "err"); return; }
+            const next = notif.upsertReminderPreset(user.id, {
+              id: `custom-${Date.now()}`,
+              kind: 'custom',
+              title: customTitle.trim(),
+              body: customBody.trim() || notif.getCustomReminderMessage(customTitle.trim()),
+              enabled: true,
+              time: customTime,
+              repeatDaily: false,
+            });
+            saveReminder(next);
+            setCustomTitle("");
+            setCustomBody("");
+            toast("Custom reminder added", "ok");
+          }}><AlarmClock size={14} /> Add reminder</Btn>
+        </div>
       </div>
 
       {/* feedback sheet */}
