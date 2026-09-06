@@ -1,5 +1,5 @@
 import type { SupabaseClient, User as SupabaseUser } from "@supabase/supabase-js";
-import { getSupabase, initSupabase } from "./supabase";
+import { getSupabase, initSupabase, clearSupabase } from "./supabase";
 import type { Announcement, Attendance, Feedback, Leave, Overtime, PiketAssignment, PiketLog, PiketTask, PointEvent, RedeemItem, Redemption, Role, Settings, SwapOverride, SwapRequest, User } from "../types";
 import type { DB } from "../types";
 

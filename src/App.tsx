@@ -7,6 +7,7 @@ import { useT } from "./lib/i18n";
 import { APP_VERSION } from "./lib/store";
 import { Avatar, Btn, Chip, Confirm, LiveDot, Seg, Sheet, Toggle, handleHardwareBack, toast } from "./components/ui";
 import { ChangelogSheet } from "./lib/changelog";
+import { ServerStatusSheet } from "./components/server-status";
 import ProductionSetup from "./features/production-setup";
 import Login from "./features/auth";
 import Dashboard from "./features/dashboard";
@@ -162,6 +163,7 @@ function Splash() {
 function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => void; onChangelog: () => void }) {
     const [tutorialOpen, setTutorialOpen] = useState(() => !user.tutorialCompleted || user.tutorialVersion !== 1);
     const [tutorialStep, setTutorialStep] = useState(() => user.tutorialStep ?? 0);
+  const [statusOpen, setStatusOpen] = useState(false);
   const db = useDB();
   const t = useT();
   const isAdmin = user.role !== "staff";
@@ -268,10 +270,12 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
           )}
           <div className="min-w-0 flex-1 leading-tight">
             <p className="ttl truncate text-[15px] font-bold text-ink">{db.settings.appName}</p>
-            <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-wider text-faint">
-              <span className="led" /> {db.settings.siteName}
-              {tab === "fifth" && adminSec !== "live" && <span className="text-amber">· {adminSec}</span>}
-            </p>
+            <button onClick={() => setStatusOpen(true)} className="tap -ml-1 text-left">
+              <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-wider text-faint hover:text-ink transition-colors">
+                <LiveDot tone={!online ? "bad" : (db.settings.supabase.status === "connected" ? "ok" : "amber")} /> {db.settings.siteName}
+                {tab === "fifth" && adminSec !== "live" && <span className="text-amber">· {adminSec}</span>}
+              </p>
+            </button>
           </div>
           <span className="hidden font-mono text-[11.5px] tabular text-mut min-[380px]:inline">
             {(() => {
@@ -312,6 +316,8 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
           {tab === "fifth" && (isAdmin ? <Admin user={user} sec={adminSec} onSec={goAdminSec} /> : <Me user={user} onLogout={onLogout} onChangelog={onChangelog} />)}
         </div>
       </main>
+
+      <ServerStatusSheet open={statusOpen} onClose={() => setStatusOpen(false)} online={online} />
 
       {/* bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-50">
