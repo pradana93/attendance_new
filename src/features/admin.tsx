@@ -15,10 +15,39 @@ import { useT } from "../lib/i18n";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
-          {/* Center beacon */}
-          <circle cx="0" cy="0" r="5" fill="var(--amber)" />
+import { GeofenceStudio } from "./geofence";
 
-          {/* User dots */}
+function FloorRadar({ onDutyIds }: { onDutyIds: string[] }) {
+  const db = getDB();
+  const t = useT();
+  if (!db) return null;
+  const { radius } = db.settings;
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between px-3.5 pt-3">
+        <p className="ttl inline-flex items-center gap-1.5 text-[12px] font-bold text-ink">
+          <Radio size={14} className="text-cool" /> {t("lr.title")}
+        </p>
+        <Chip tone="ok"><span className="pulse-dot mr-1 inline-block h-1.5 w-1.5 rounded-full bg-ok" /> {onDutyIds.length} {t("lr.live")}</Chip>
+      </div>
+      <div className="relative mt-2 h-[190px] w-full overflow-hidden rounded-lg bg-panel2/40">
+        <svg viewBox="-150 -150 300 300" className="h-full w-full">
+          <defs>
+            <pattern id="radarGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--line)" strokeWidth="0.5" />
+            </pattern>
+            <radialGradient id="radarGrad">
+              <stop offset="0%" stopColor="var(--amber)" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="var(--amber)" stopOpacity="0.02" />
+            </radialGradient>
+          </defs>
+          <rect x="-150" y="-150" width="300" height="300" fill="url(#radarGrid)" />
+          <circle cx="0" cy="0" r="135" fill="url(#radarGrad)">
+            <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="8s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="0" cy="0" r={radius * 0.3} fill="var(--amber)" fillOpacity="0.08" stroke="var(--amber)" strokeWidth="2" strokeDasharray="6 4" />
+          <circle cx="0" cy="0" r="5" fill="var(--amber)" />
           {onDutyIds.map((id) => {
             const u = db.users.find((x) => x.id === id);
             if (!u) return null;
