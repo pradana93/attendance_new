@@ -7,7 +7,7 @@ import {
 import type { Lang, Role, User } from "../types";
 import {
   addAnnouncement, addPointEvent, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
-  getDB, manualLog, rerunSetup, reviewSelfReport,
+    getDB, manualLog, rerunSetup, reviewSelfReport, addPointEventLocal,
   toggleActive, updateSettings, updateUser, userName,
 } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
@@ -18,7 +18,7 @@ import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
 import { testSupabaseConnection, initSupabase } from "../lib/supabase";
 import { createStaffAccount, workspaceProfiles } from "../lib/production";
-import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote } from "../lib/production";
+import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote, addPointEventRemote } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
@@ -876,7 +876,14 @@ function PointsPanel({ admin }: { admin: User }) {
           if (!targetUser) { toast("Select a staff user", "err"); return; }
           if (!label.trim() || !reason.trim()) { toast("Label and reason are required", "err"); return; }
           if (!delta || Number.isNaN(delta)) { toast("Points cannot be zero", "err"); return; }
-          const result = addPointEvent({ userId: targetUser, delta, label: label.trim(), reason: reason.trim(), adminId: admin.id, category });
+            let result;
+            try {
+              await addPointEventRemote({ userId: targetUser, delta, label: label.trim(), reason: reason.trim(), adminId: admin.id, category });
+              result = { ok: true, msg: `${delta > 0 ? "+" : ""}${delta} pts saved to Supabase.` };
+            } catch (e: any) {
+              console.error("Supabase manual point insert failed, trying local fallback", e);
+              result = addPointEventLocal({ userId: targetUser, delta, label: label.trim(), reason: reason.trim(), adminId: admin.id, category });
+            }
           if (!result.ok) { toast(result.msg, "err"); return; }
           await refreshProductionData();
           toast(result.msg, "ok");

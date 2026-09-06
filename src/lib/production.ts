@@ -438,6 +438,24 @@ export async function deleteAnnouncementRemote(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+  export async function addPointEventRemote(input: { userId: string; delta: number; label: string; reason: string; adminId: string; category: string }): Promise<void> {
+    const client = productionClient();
+    if (!client) throw new Error("Supabase is not configured for this deployment.");
+    const workspaceId = await currentWorkspaceId(client);
+    if (!workspaceId) throw new Error("Your workspace profile could not be found.");
+    const { error } = await client.from("point_events").insert({
+      workspace_id: workspaceId,
+      user_id: input.userId,
+      delta: input.delta,
+      label: input.label,
+      reason: input.reason,
+      source: "manual",
+      admin_id: input.adminId,
+      category: input.category,
+    });
+    if (error) throw new Error(error.message);
+  }
+
 export async function updateProfileRemote(input: { id: string; name: string; email: string; employeeId: string; role: Role; department: string }): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");

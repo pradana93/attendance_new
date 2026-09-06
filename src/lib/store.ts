@@ -586,6 +586,28 @@ export function addPointEvent(input: { userId: string; delta: number; label: str
   return { ok: true, msg: `${input.delta > 0 ? "+" : ""}${input.delta} pts saved.` };
 }
 
+  export function addPointEventLocal(input: { userId: string; delta: number; label: string; reason: string; adminId: string; category: NonNullable<PointEvent["category"]> }): { ok: boolean; msg: string } {
+    if (!cache) return { ok: false, msg: "Store not ready" };
+    const u = userById(input.userId);
+    if (!u) return { ok: false, msg: "User not found." };
+    if (!input.reason.trim()) return { ok: false, msg: "Reason is required." };
+    if (!Number.isFinite(input.delta) || input.delta === 0) return { ok: false, msg: "Point change must not be zero." };
+    cache.pointEvents.unshift({
+      id: uid(),
+      userId: input.userId,
+      date: todayKey(),
+      delta: input.delta,
+      label: input.label.trim(),
+      reason: input.reason.trim(),
+      source: "manual",
+      adminId: input.adminId,
+      category: input.category,
+    });
+    u.points = Math.max(0, u.points + input.delta);
+    mutate();
+    return { ok: true, msg: `${input.delta > 0 ? "+" : ""}${input.delta} pts saved.` };
+  }
+
 export function redeem(userId: string, itemId: string): { ok: boolean; msg: string } {
   if (!cache) return { ok: false, msg: "Store not ready" };
   const u = userById(userId); const it = cache.items.find((i) => i.id === itemId);
