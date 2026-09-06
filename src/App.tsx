@@ -65,6 +65,15 @@ export default function App() {
   }, [cloudReady]);
 
   useEffect(() => {
+    if (!cloudReady || !cur) return;
+    void (async () => {
+      const remoteSettings = await workspaceSettings();
+      if (remoteSettings) updateSettings(remoteSettings);
+      await refreshProductionData();
+    })();
+  }, [cloudReady, cur?.id]);
+
+  useEffect(() => {
     if (!cur) return;
     return subscribeWorkspaceChanges(() => { void refreshProductionData(); });
   }, [cur?.id]);
