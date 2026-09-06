@@ -263,7 +263,7 @@ function mulberry(a: number) {
 }
 
 /* ================= constants ================= */
-export const APP_VERSION = "2.2.0";
+export const APP_VERSION = "2.2.1";
 
 /* ================= lifecycle ================= */
 export function initStore() {

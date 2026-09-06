@@ -17,6 +17,14 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.2.1", date: new Date().toISOString().slice(0, 10), name: "Header & Security Upgrades",
+    items: [
+      { tag: "improved", text: "Expanded connection status visibility in the header for improved legibility across mobile viewports." },
+      { tag: "improved", text: "Armed 'Ping Database' button with a 3-second cooldown guard to mitigate repetitive clicking/unnecessary server queries." },
+      { tag: "improved", text: "Shifted development trajectory to highlight zero-database-changes, pure UI/UX polishing and ergonomic optimization." },
+    ],
+  },
+  {
     version: "2.2.0", date: new Date().toISOString().slice(0, 10), name: "Supabase Cloud Sync v2",
     items: [
       { tag: "new", text: "Real Supabase cloud sync integration — no mocks, direct database connection with @supabase/supabase-js." },
