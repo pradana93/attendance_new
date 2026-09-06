@@ -128,13 +128,28 @@ export function toggleReminderPreset(userId: string, presetId: string, enabled: 
   return next;
 }
 
-export function nextReminderAt(time: string): number {
+function isReminderDay(target: Date, days?: number[]): boolean {
+  if (!days || days.length === 0) return true;
+  const day = target.getDay();
+  return days.includes(day === 0 ? 7 : day);
+}
+
+function nextReminderDate(time: string, days?: number[], repeatDaily = false): Date {
   const now = new Date();
   const [hours, minutes] = time.split(':').map(Number);
   const target = new Date(now);
   target.setHours(hours, minutes, 0, 0);
-  if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
-  return target.getTime();
+  const maxLookahead = repeatDaily || (days && days.length > 0) ? 14 : 7;
+  for (let i = 0; i < maxLookahead; i++) {
+    if (target.getTime() > now.getTime() && isReminderDay(target, days)) return target;
+    target.setDate(target.getDate() + 1);
+    target.setHours(hours, minutes, 0, 0);
+  }
+  return target;
+}
+
+export function nextReminderAt(time: string, days?: number[], repeatDaily = false): number {
+  return nextReminderDate(time, days, repeatDaily).getTime();
 }
 
 export function describeReminder(preset: ReminderPreset): string {
@@ -217,7 +232,7 @@ export function scheduleReminder(reminder: Reminder): number {
 
 export function schedulePreset(reminder: ReminderPreset, fallbackBody?: string): number {
   if (!reminder.enabled || !reminder.time) return -1;
-  const when = nextReminderAt(reminder.time);
+  const when = nextReminderAt(reminder.time, reminder.days, !!reminder.repeatDaily);
   return scheduleReminder({
     id: reminder.id,
     type: reminder.kind === 'custom' ? 'piket' : reminder.kind,
@@ -331,4 +346,10 @@ export function getPiketMessage(taskName: string): string {
 
 export function getCustomReminderMessage(title: string): string {
   return `Reminder: ${title}`;
+}
+
+export function formatReminderNext(preset: ReminderPreset): string {
+  if (!preset.enabled || !preset.time) return 'inactive';
+  const next = nextReminderDate(preset.time, preset.days, !!preset.repeatDaily);
+  return next.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }

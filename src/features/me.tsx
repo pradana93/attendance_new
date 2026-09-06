@@ -28,6 +28,8 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
   const [customTitle, setCustomTitle] = useState("");
   const [customBody, setCustomBody] = useState("");
   const [customTime, setCustomTime] = useState("08:00");
+  const [editingReminder, setEditingReminder] = useState<notif.ReminderPreset | null>(null);
+  const [removeReminder, setRemoveReminder] = useState<notif.ReminderPreset | null>(null);
   
   useEffect(() => {
     const seeded = notif.mergeReminderPresets(user.id, notif.defaultReminderPresets(user.name, db?.settings.lateTime ?? "08:00"));
@@ -118,6 +120,11 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
     setNotifEnabled(timers.length > 0);
   };
 
+  const upsertLocalReminder = (preset: notif.ReminderPreset) => {
+    const next = notif.upsertReminderPreset(user.id, preset);
+    saveReminder(next);
+  };
+
   return (
     <div className="a-fadein stagger space-y-3">
       {/* profile */}
@@ -200,15 +207,18 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold text-ink">{item.title}</p>
                 <p className="font-mono text-[10.5px] text-faint">{item.time ?? "custom"} · {item.repeatDaily ? "daily" : "one-time"}</p>
+                <p className="font-mono text-[10px] text-faint">next: {notif.formatReminderNext(item)}</p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setEditingReminder(item)}
+                  className="tap rounded-lg border border-line bg-panel2 px-2.5 py-1.5 text-[11px] font-semibold text-mut hover:border-cool/40 hover:text-cool"
+                >
+                  Edit
+                </button>
                 <Toggle on={item.enabled} onChange={(enabled) => saveReminder(notif.toggleReminderPreset(user.id, item.id, enabled))} />
                 <button
-                  onClick={() => {
-                    const next = notif.removeReminderPreset(user.id, item.id);
-                    saveReminder(next);
-                    toast("Reminder removed", "info");
-                  }}
+                  onClick={() => setRemoveReminder(item)}
                   className="tap rounded-lg border border-line bg-panel2 p-2 text-faint hover:border-bad/40 hover:text-bad"
                   aria-label={`Remove ${item.title}`}
                 >
@@ -253,6 +263,40 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
 
       {/* feedback sheet */}
       <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} user={user} />
+
+      <Sheet open={!!editingReminder} onClose={() => setEditingReminder(null)} title="Edit reminder">
+        {editingReminder && (
+          <div className="space-y-3.5">
+            <Field label="Reminder title"><input className="inp" value={editingReminder.title} onChange={(e) => setEditingReminder({ ...editingReminder, title: e.target.value })} /></Field>
+            <Field label="Message"><input className="inp" value={editingReminder.body} onChange={(e) => setEditingReminder({ ...editingReminder, body: e.target.value })} /></Field>
+            <Field label="Time"><input className="inp font-mono" type="time" value={editingReminder.time ?? "08:00"} onChange={(e) => setEditingReminder({ ...editingReminder, time: e.target.value })} /></Field>
+            <div className="flex items-center justify-between rounded-xl border border-line bg-panel2 px-3 py-2.5">
+              <div>
+                <p className="text-[12.5px] font-semibold text-ink">Repeat daily</p>
+                <p className="font-mono text-[10.5px] text-faint">Keeps the reminder active every day</p>
+              </div>
+              <Toggle on={!!editingReminder.repeatDaily} onChange={(v) => setEditingReminder({ ...editingReminder, repeatDaily: v })} />
+            </div>
+            <Btn className="w-full" onClick={() => { upsertLocalReminder(editingReminder); setEditingReminder(null); toast("Reminder updated", "ok"); }}><AlarmClock size={14} /> Save reminder</Btn>
+          </div>
+        )}
+      </Sheet>
+
+      <Confirm
+        open={!!removeReminder}
+        onClose={() => setRemoveReminder(null)}
+        danger
+        title="Remove reminder?"
+        body={removeReminder ? `Delete ${removeReminder.title} from your saved reminders.` : ""}
+        yesLabel="Remove"
+        onYes={() => {
+          if (!removeReminder) return;
+          const next = notif.removeReminderPreset(user.id, removeReminder.id);
+          saveReminder(next);
+          setRemoveReminder(null);
+          toast("Reminder removed", "info");
+        }}
+      />
 
       {/* settings */}
       <SectionTitle>{t("m.settings")}</SectionTitle>
