@@ -90,4 +90,4 @@ src/
 
 ---
 
-**ShiftGate** · v2.2.2 · local-first build — see the in-app changelog for release history.
+**ShiftGate** · v2.3.0 · local-first build — see the in-app changelog for release history.

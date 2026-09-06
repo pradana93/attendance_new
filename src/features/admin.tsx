@@ -22,7 +22,7 @@ import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, u
 import { refreshProductionData } from "../lib/store";
 import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
-export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "config";
 type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
@@ -44,7 +44,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         className="no-scrollbar overflow-x-auto [&>button]:shrink-0"
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
-          { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "shifts", label: "Shifts" }, { id: "config", label: t("a.config") },
         ]}
         value={sec} onChange={setSec}
       />
@@ -54,7 +54,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
       {sec === "points" && <PointsPanel admin={user} />}
       {sec === "photos" && <PhotosPanel />}
       {sec === "feedback" && <FeedbackInbox admin={user} />}
-      {sec === "cloud" && <CloudPanel />}
+      {sec === "shifts" && <ShiftsPanel admin={user} />}
       {sec === "config" && <ConfigPanel />}
     </div>
   );
@@ -379,13 +379,18 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
   const [empId, setEmpId] = useState("");
   const [dept, setDept] = useState(DEPTS[0]);
   const [role, setRole] = useState<Role>("staff");
+  const [shiftStart, setShiftStart] = useState("");
+  const [shiftEnd, setShiftEnd] = useState("");
+
   useEffect(() => {
     if (user) {
       setName(user.name); setEmail(user.email); setEmpId(user.employeeId);
       setDept(DEPTS.includes(user.department) ? user.department : DEPTS[0]);
       setRole(user.role);
+      setShiftStart(user.shiftStart ?? db?.settings.lateTime ?? "08:00");
+      setShiftEnd(user.shiftEnd ?? "17:00");
     }
-  }, [user]);
+  }, [user, db]);
   if (!db) return null;
   const isSuper = user?.role === "superadmin";
   return (
@@ -411,6 +416,10 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
               </select>
             </Field>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Shift Start (HH:mm)"><input className="inp font-mono" type="time" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} /></Field>
+            <Field label="Shift End (HH:mm)"><input className="inp font-mono" type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} /></Field>
+          </div>
           <Field label={t("a.role")} hint={isSuper ? t("a.superLocked") : undefined}>
             <div className="flex gap-2">
               {(["staff", "admin"] as Role[]).map((r) => (
@@ -420,7 +429,14 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
             </div>
           </Field>
           <Btn className="w-full" onClick={async () => {
-            try { await updateProfileRemote({ id: user.id, name, email, employeeId: empId, role: isSuper ? "superadmin" : role, department: dept }); await refreshProductionData(); await onSaved(); toast(`${name}'s account updated.`, "ok"); onClose(); }
+            try {
+              await updateProfileRemote({ id: user.id, name, email, employeeId: empId, role: isSuper ? "superadmin" : role, department: dept });
+              await updateProfileShiftRemote(user.id, shiftStart || null, shiftEnd || null);
+              await refreshProductionData();
+              await onSaved();
+              toast(`${name}'s account updated.`, "ok");
+              onClose();
+            }
             catch (error) { toast(error instanceof Error ? error.message : "Could not update account", "err"); }
           }}><Check size={15} /> {t("a.updateUser")}</Btn>
         </div>
@@ -433,198 +449,127 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
 type Evidence = { id: string; src: string; kind: "piket" | "ot"; who: string; label: string; date: string; time: string };
 
 function PhotosPanel() {
-  const db = getDB();
-  const t = useT();
-  const [filter, setFilter] = useState<"all" | "piket" | "ot">("all");
-  const [view, setView] = useState<Evidence | null>(null);
+  /* ---------------- shifts and user-schedule assignments ---------------- */
+  function ShiftsPanel({ admin }: { admin: User }) {
+    const db = getDB();
+    const t = useT();
+    const [profiles, setProfiles] = useState<User[]>([admin]);
+    const [loadingShifts, setLoadingShifts] = useState(true);
+    const [editingShift, setEditingItem] = useState<{ id: string; name: string; start: string; end: string } | null>(null);
 
-  const ev = useMemo<Evidence[]>(() => {
-    if (!db) return [];
-    const pik: Evidence[] = db.piketLog.filter((l) => l.proof).map((l) => {
-      const task = db.tasks.find((x) => x.id === l.taskId);
-      return { id: "p-" + l.id, src: l.proof!, kind: "piket", who: userName(l.userId), label: task?.name ?? "Piket", date: l.date, time: fmtTime(l.doneAt) };
-    });
-    const ots: Evidence[] = db.ot.filter((o) => o.photo).map((o) => ({
-      id: "o-" + o.id, src: o.photo!, kind: "ot", who: userName(o.userId), label: t("o.title"), date: o.date, time: o.start,
-    }));
-    return [...pik, ...ots].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-  }, [db, t]);
-
-  if (!db) return null;
-  const list = ev.filter((e) => filter === "all" || e.kind === filter);
-
-  return (
-    <div className="a-fadein space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="ttl text-[15px] font-bold text-ink">{t("a.photoGallery")}</p>
-          <p className="font-mono text-[10.5px] text-faint">{ev.length} {t("a.photos").toLowerCase()} · {t("a.photoHint")}</p>
-        </div>
-        <Seg small value={filter} onChange={setFilter} options={[
-          { id: "all", label: t("a.galleryAll") }, { id: "piket", label: t("a.galleryPiket") }, { id: "ot", label: t("a.galleryOt") },
-        ]} />
-      </div>
-
-      {list.length === 0 ? (
-        <Empty icon={<ImageIcon size={26} />} title={t("a.noPhotos")} sub={t("a.noPhotosSub")} />
-      ) : (
-        <div className="columns-2 gap-2.5">
-          {list.map((e) => (
-            <button key={e.id} onClick={() => setView(e)}
-              className="tap group relative mb-2.5 block w-full break-inside-avoid overflow-hidden rounded-xl border border-line bg-panel2 text-left">
-              <img src={e.src} alt={e.label} loading="lazy"
-                className="w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                style={{ aspectRatio: e.kind === "piket" ? "4/3" : "16/10" }} />
-              <span className="absolute left-2 top-2">
-                <Chip tone={e.kind === "piket" ? "amber" : "cool"}>
-                  {e.kind === "piket" ? <ClipboardList size={10} /> : <Clock3 size={10} />} {t(e.kind === "piket" ? "a.galleryPiket" : "a.galleryOt")}
-                </Chip>
-              </span>
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2.5 pb-2 pt-6">
-                <span className="block truncate text-[11.5px] font-semibold text-white">{e.label}</span>
-                <span className="block truncate font-mono text-[9.5px] text-white/65">{e.who} · {fmtDate(e.date)} {e.time}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <Lightbox src={view?.src ?? null} onClose={() => setView(null)}
-        caption={view ? `${view.label} · ${view.who} · ${fmtDate(view.date)} ${view.time}` : undefined} />
-    </div>
-  );
-}
-
-function genPw() {
-  const c = "abcdefghjkmnpqrstuvwxyz23456789";
-  return "wms-" + Array.from({ length: 6 }, () => c[Math.floor(Math.random() * c.length)]).join("");
-}
-
-/* ---------------- announcements ---------------- */
-function NoticePanel({ admin }: { admin: User }) {
-  const db = getDB();
-  const t = useT();
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [pinned, setPinned] = useState(false);
-  if (!db) return null;
-  const list = [...db.announcements].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.date.localeCompare(a.date));
-  return (
-    <div className="a-fadein space-y-3">
-      <div className="card space-y-3 p-4">
-        <Field label={t("a.titleL")}><input className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Forklift maintenance — Friday" /></Field>
-        <Field label={t("a.message")}>
-          <textarea className="inp min-h-[68px] resize-none" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Broadcast to every device on the floor…" />
-        </Field>
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-[12.5px] text-mut"><Toggle on={pinned} onChange={setPinned} /> {t("a.pinDash")}</label>
-          <Btn onClick={async () => {
-            if (!title.trim() || !body.trim()) { toast("Title and message required", "err"); return; }
-            try { await createAnnouncement({ title: title.trim(), body: body.trim(), authorId: admin.id, pinned }); await refreshProductionData(); toast("Broadcast sent to all staff"); setTitle(""); setBody(""); setPinned(false); }
-            catch (error) { toast(error instanceof Error ? error.message : "Could not send announcement", "err"); }
-          }}><Megaphone size={14} /> {t("a.broadcast")}</Btn>
-        </div>
-      </div>
-
-      {list.length === 0 ? (
-        <Empty icon={<Megaphone size={26} />} title={t("a.noAnn")} sub={t("a.noAnnSub")} />
-      ) : (
-        <div className="space-y-2">
-          {list.map((a) => (
-            <div key={a.id} className="card p-3.5">
-              <div className="flex items-center gap-2">
-                {a.pinned && <Chip tone="amber">{t("a.pinned")}</Chip>}
-                <span className="font-mono text-[10px] text-faint">{a.date} · {a.author}</span>
-                <button onClick={async () => { try { await deleteAnnouncementRemote(a.id); await refreshProductionData(); toast("Removed", "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not remove announcement", "err"); } }}
-                  className="tap ml-auto rounded-lg border border-line bg-panel2 p-1.5 text-faint hover:text-bad" aria-label="Delete"><Trash2 size={13} /></button>
-              </div>
-              <p className="ttl mt-1.5 text-[15px] font-bold text-ink">{a.title}</p>
-              <p className="mt-0.5 text-[12.5px] leading-relaxed text-mut">{a.body}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ---------------- supabase deploy ---------------- */
-const MIGRATIONS = [
-  "verify project credentials …", "check workspace schema …", "initialize Supabase client …",
-];
-
-function CloudPanel() {
-  const db = getDB();
-  const t = useT();
-  const supa = db?.settings.supabase;
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [url, setUrl] = useState("");
-  const [key, setKey] = useState("");
-  const [migStep, setMigStep] = useState(-1);
-  const [testing, setTesting] = useState(false);
-  const [showSql, setShowSql] = useState(false);
-  const [confirmOff, setConfirmOff] = useState(false);
-  const [schemaReady, setSchemaReady] = useState(false);
-  const migStarted = useRef(false);
-
-  useEffect(() => {
-    if (step !== 2 || migStarted.current) return;
-    migStarted.current = true;
-    let cancelled = false;
-    (async () => {
-      // Step 1: Test connection
-      setMigStep(0);
-      const connTest = await testSupabaseConnection(url, key);
-      if (!connTest.success && !cancelled) {
-        toast(connTest.error || "Connection failed", "err");
-        setStep(1);
-        migStarted.current = false;
-        setMigStep(-1);
-        return;
+    const fetchProfiles = async () => {
+      setLoadingShifts(true);
+      try {
+        const prs = await workspaceProfiles();
+        setProfiles(prs);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Could not load shift profiles", "err");
+      } finally {
+        setLoadingShifts(false);
       }
-      if (cancelled) return;
-      
-      setSchemaReady(connTest.schemaReady);
+    };
 
-      // The anon key cannot execute DDL. Schema installation must be run in
-      // Supabase SQL Editor, then verified from this screen.
-      setMigStep(1);
-      await wait(500);
-      setMigStep(2);
-      initSupabase(url, key);
-      await wait(300);
-      
-      if (!cancelled) window.setTimeout(() => !cancelled && setStep(3), 350);
-    })();
-    return () => { cancelled = true; migStarted.current = false; };
-  }, [step, url, key]);
+    useEffect(() => {
+      void fetchProfiles();
+    }, []);
 
-  if (!db || !supa) return null;
+    if (!db) return null;
+    const supa = db.settings.supabase;
 
-  // connected state
-  if (supa.status === "connected") {
     return (
       <div className="a-fadein space-y-3">
-        <div className="card relative overflow-hidden p-4">
-          <div className="absolute inset-x-0 top-0 h-1 bg-ok" />
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ok/12 text-ok"><Cloud size={20} /></span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="ttl text-[15px] font-bold text-ink">{t("dp.connected")}</p>
-                <LiveDot />
-              </div>
-              <p className="truncate font-mono text-[11px] text-faint">{supa.url}</p>
+        {/* Cloud Status Header Strip (Replacing massive CloudPanel) */}
+        <div className="card flex items-center justify-between p-3">
+          <div className="flex items-center gap-2">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${supa.status === "connected" ? "bg-ok/10 text-ok" : "bg-panel2 text-faint"}`}><Cloud size={16} /></span>
+            <div>
+              <p className="text-[12.5px] font-semibold text-ink">Cloud Data Status</p>
+              <p className="font-mono text-[9px] text-faint truncate max-w-[20ch]">{supa.status === "connected" ? supa.url.replace("https://", "") : "Offline mode"}</p>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[11px]">
-            <div className="card2 px-3 py-2"><p className="text-faint">connected</p><p className="mt-0.5 text-ink">{supa.connectedAt ? relTime(supa.connectedAt) : "—"}</p></div>
-            <div className="card2 px-3 py-2"><p className="text-faint">{t("dp.lastSync").toLowerCase()}</p><p className="mt-0.5 text-ink">{supa.lastSync ? relTime(supa.lastSync) : "never"}</p></div>
+          <Chip tone={supa.status === "connected" ? "ok" : "amber"}>{supa.status === "connected" ? "Sync Armed" : "Local"}</Chip>
+        </div>
+
+        {/* Shift Creator description and list */}
+        <div className="flex items-end justify-between px-1">
+          <div>
+            <p className="ttl text-[15px] font-bold text-ink">Shift Creator</p>
+            <p className="font-mono text-[10.5px] text-faint">Determine custom clock-in/out and late thresholds per person.</p>
           </div>
-          <div className="mt-3 space-y-2">
-            <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 font-mono text-[10.5px] leading-relaxed text-mut">
-              Cloud credentials are saved, but application data is not synchronized yet. Do not use this deployment for production attendance until the Supabase data layer is enabled.
-            </p>
+        </div>
+
+        {loadingShifts ? (
+          <div className="card p-4 text-center font-mono text-[11px] text-faint">Loading shift plans…</div>
+        ) : (
+          <div className="space-y-2">
+            {profiles.map((p) => {
+              const start = p.shiftStart ?? db.settings.lateTime ?? "08:00";
+              const end = p.shiftEnd ?? "17:00";
+              return (
+                <div key={p.id} className="card flex items-center justify-between p-3.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar user={p} size={32} />
+                    <div className="min-w-0">
+                      <p className="truncate text-[13.5px] font-semibold text-ink">{p.name}</p>
+                      <p className="font-mono text-[10.5px] text-faint">{p.employeeId} · {p.department}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right font-mono">
+                      <p className="text-[13px] font-semibold text-ink">{start} – {end}</p>
+                      <p className="text-[9.5px] text-ok uppercase tracking-wider">Custom Shift</p>
+                    </div>
+                    <button onClick={() => setEditingItem({ id: p.id, name: p.name, start, end })}
+                      className="tap h-8 w-8 rounded-lg border border-line bg-panel2 flex items-center justify-center text-mut hover:text-amber hover:border-amber/50">
+                      <Pencil size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Sheet open={!!editingShift} onClose={() => setEditingItem(null)} title="Configure Shift Interval">
+          {editingShift && (
+            <div className="space-y-4">
+              <div className="card2 flex items-center gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold text-ink">{editingShift.name}</p>
+                  <p className="font-mono text-[10.5px] text-faint">Setting individual operating hours overrides default thresholds</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Shift Start (Earliest In)">
+                  <input className="inp font-mono" type="time" value={editingShift.start} onChange={(e) => setEditingItem({ ...editingShift, start: e.target.value })} />
+                </Field>
+                <Field label="Shift End (Auto Out)">
+                  <input className="inp font-mono" type="time" value={editingShift.end} onChange={(e) => setEditingItem({ ...editingShift, end: e.target.value })} />
+                </Field>
+              </div>
+              <div className="flex gap-2">
+                <Btn variant="ghost" className="flex-1" onClick={() => {
+                  // Reset to site settings defaults
+                  setEditingItem({ ...editingShift, start: db.settings.lateTime, end: "17:00" });
+                }}>Use Defaults</Btn>
+                <Btn className="flex-1" onClick={async () => {
+                  try {
+                    await updateProfileShiftRemote(editingShift.id, editingShift.start, editingShift.end);
+                    await refreshProductionData();
+                    toast(`Shift parameters saved for ${editingShift.name}`);
+                    setEditingItem(null);
+                    void fetchProfiles();
+                  } catch (e) {
+                    toast(e instanceof Error ? e.message : "Error saving shift", "err");
+                  }
+                }}><Check size={14} /> Save Shift</Btn>
+              </div>
+            </div>
+          )}
+        </Sheet>
+      </div>
+    );
+  }
             <Btn variant="ghost" className="w-full" onClick={() => setConfirmOff(true)}><LogOut size={14} /> {t("dp.disconnect")}</Btn>
           </div>
         </div>
@@ -747,8 +692,10 @@ function ConfigPanel() {
   const t = useT();
   const [confirmSetup, setConfirmSetup] = useState(false);
   const [geofenceOpen, setGeofenceOpen] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(false);
   if (!db) return null;
   const s = db.settings;
+  const supa = s.supabase;
   return (
     <div className="a-fadein space-y-3">
       <SectionTitle><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-amber" /> {t("a.geo")}</span></SectionTitle>
@@ -802,7 +749,14 @@ function ConfigPanel() {
               <p className="font-mono text-[10.5px] text-faint">{t("a.localHint")}</p>
             </div>
           </div>
-          <Chip tone={s.supabase.status === "connected" ? "cool" : "ok"}>{s.supabase.status === "connected" ? "cloud+local" : t("a.synced")}</Chip>
+          <div className="flex items-center gap-2">
+            {supa.status === "connected" && (
+              <button onClick={() => setConfirmOff(true)} className="tap rounded-lg border border-line bg-panel2/60 px-2.5 py-1 font-mono text-[10px] text-bad uppercase hover:bg-bad/5">
+                Disconnect
+              </button>
+            )}
+            <Chip tone={s.supabase.status === "connected" ? "cool" : "ok"}>{s.supabase.status === "connected" ? "cloud+local" : t("a.synced")}</Chip>
+          </div>
         </div>
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2.5">
@@ -818,6 +772,9 @@ function ConfigPanel() {
 
       <Confirm open={confirmSetup} onClose={() => setConfirmSetup(false)} danger
         title={t("a.rerunQ")} body={t("a.rerunBody")} yesLabel={t("a.wipe")} onYes={() => rerunSetup()} />
+      <Confirm open={confirmOff} onClose={() => setConfirmOff(false)} danger title="Disconnect Supabase Sync?"
+        body="The workspace will return to local-only first-run mode. No local credentials or cached punches will be compromised." yesLabel="Disconnect"
+        onYes={() => { disconnectSupabase(); toast("Cloud synchronization disabled", "info"); }} />
       <GeofenceStudio open={geofenceOpen} onClose={() => setGeofenceOpen(false)} />
     </div>
   );

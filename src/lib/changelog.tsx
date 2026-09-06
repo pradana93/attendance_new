@@ -17,6 +17,14 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.3.0", date: new Date().toISOString().slice(0, 10), name: "Admin Interface Redesign & Shift Creator",
+    items: [
+      { tag: "new", text: "Introduced Shift Creator inside the Admin tab, offering customized daily schedules and starting/ending thresholds per employee." },
+      { tag: "improved", text: "Sunsetted the redundant Cloud setup wizard segment and retrofitted a high-signal, inline Cloud Sync integration header strip." },
+      { tag: "improved", text: "Refactored user roster modal card editors with ergonomic custom shift parameters (hours, duration thresholds)." }
+    ],
+  },
+  {
     version: "2.2.2", date: new Date().toISOString().slice(0, 10), name: "Piket Rewards Full CRUD Control",
     items: [
       { tag: "new", text: "Added administrative controls to Add, Edit, Update, and soft-remove (Retire) individual reward catalog items directly from the Piket Rewards tab." },
