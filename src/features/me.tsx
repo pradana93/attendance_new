@@ -48,7 +48,16 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
     setNotifEnabled(true);
   }, [notifPermission, reminders]);
   
-  if (!db) return null;
+  if (!db) {
+    return (
+      <div className="a-fadein space-y-3">
+        <div className="card p-4">
+          <p className="ttl text-[13px] font-bold text-ink">{t("m.profile")}</p>
+          <p className="mt-1 font-mono text-[10.5px] text-faint">Loading your workspace profile…</p>
+        </div>
+      </div>
+    );
+  }
   const s = db.settings;
   const balance = leaveBalance(user.id);
   const myLeaves = db.leaves.filter((l) => l.userId === user.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
