@@ -4,17 +4,17 @@
 create or replace function public.fn_sync_point_events_to_profile()
 returns trigger as $$
 begin
-  if (trigger_op = 'INSERT') then
+  if (TG_OP = 'INSERT') then
     update public.profiles 
     set points = coalesce(points, 0) + new.delta,
         updated_at = now() 
     where id = new.user_id;
-  elsif (trigger_op = 'DELETE') then
+  elsif (TG_OP = 'DELETE') then
     update public.profiles 
     set points = greatest(0, coalesce(points, 0) - old.delta),
         updated_at = now() 
     where id = old.user_id;
-  elsif (trigger_op = 'UPDATE') then
+  elsif (TG_OP = 'UPDATE') then
     update public.profiles 
     set points = greatest(0, coalesce(points, 0) - old.delta + new.delta),
         updated_at = now() 
