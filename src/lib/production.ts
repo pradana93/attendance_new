@@ -486,6 +486,13 @@ export async function setProfileActiveRemote(id: string, active: boolean): Promi
   if (error) throw new Error(error.message);
 }
 
+export async function updateProfileShiftRemote(id: string, shiftStart: string | null, shiftEnd: string | null): Promise<void> {
+  const client = productionClient();
+  if (!client) throw new Error("Supabase is not configured for this deployment.");
+  const { error } = await client.from("profiles").update({ shift_start: shiftStart, shift_end: shiftEnd }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function setNotificationPreferenceRemote(id: string, enabled: boolean): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");
@@ -607,6 +614,8 @@ function mapProfile(row: ProfileRow): User {
     tutorialCompleted: Boolean(row.tutorial_completed),
     tutorialVersion: Number(row.tutorial_version ?? 1),
     tutorialStep: Number(row.tutorial_step ?? 0),
+    shiftStart: row.shift_start ?? undefined,
+    shiftEnd: row.shift_end ?? undefined,
   };
 }
 

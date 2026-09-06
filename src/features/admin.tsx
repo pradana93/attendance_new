@@ -8,7 +8,7 @@ import type { Lang, Role, User } from "../types";
 import {
   addAnnouncement, addPointEvent, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
     getDB, manualLog, rerunSetup, reviewSelfReport, addPointEventLocal,
-  toggleActive, updateSettings, updateUser, userName,
+  toggleActive, updateSettings, updateUser, userName, updateUserShift,
 } from "../lib/store";
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
@@ -18,11 +18,11 @@ import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
 import { testSupabaseConnection, initSupabase } from "../lib/supabase";
 import { createStaffAccount, workspaceProfiles } from "../lib/production";
-import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote, addPointEventRemote } from "../lib/production";
+import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, updateProfileRemote, addPointEventRemote, updateProfileShiftRemote } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
-export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "cloud" | "config";
 type Sec = AdminSec;
 const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
 
@@ -44,7 +44,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         className="no-scrollbar overflow-x-auto [&>button]:shrink-0"
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
-          { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "shifts", label: "Shifts" }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
         ]}
         value={sec} onChange={setSec}
       />
@@ -54,6 +54,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
       {sec === "points" && <PointsPanel admin={user} />}
       {sec === "photos" && <PhotosPanel />}
       {sec === "feedback" && <FeedbackInbox admin={user} />}
+      {sec === "shifts" && <ShiftsPanel admin={user} />}
       {sec === "cloud" && <CloudPanel />}
       {sec === "config" && <ConfigPanel />}
     </div>
@@ -547,7 +548,185 @@ function NoticePanel({ admin }: { admin: User }) {
     </div>
   );
 }
+/* ------------ warehouse shift creator ------------ */
+function ShiftsPanel({ admin }: { admin: User }) {
+  const db = getDB();
+  const t = useT();
+  const [profiles, setProfiles] = useState<User[]>([admin]);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
+  const [editUser, setEditUser] = useState<User | null>(null);
 
+  useEffect(() => {
+    workspaceProfiles().then(setProfiles).catch((error) => toast(error instanceof Error ? error.message : "Could not load staff", "err")).finally(() => setLoadingProfiles(false));
+  }, []);
+
+  if (!db) return null;
+
+  const getDisplayShift = (u: User) => {
+    if (u.shiftStart && u.shiftEnd) return `${u.shiftStart} — ${u.shiftEnd}`;
+    if (u.shiftStart) {
+      const start = u.shiftStart.split(":").map(Number);
+      const end = new Date(2000, 0, 1, start[0] + 9, start[1]);
+      const endStr = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+      return `${u.shiftStart} — ${endStr}`;
+    }
+    return `Default (${db.settings.lateTime} — +9h)`;
+  };
+
+  return (
+    <div className="a-fadein space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.shiftStart).length} custom shifts</p>
+      </div>
+      <div className="space-y-2">
+        {loadingProfiles ? <div className="card p-4 text-center font-mono text-[11px] text-faint">Loading staff…</div> : profiles.map((u) => (
+          <div key={u.id} className="card flex items-center gap-3 p-3">
+            <Avatar user={u} size={36} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-[13.5px] font-semibold text-ink">{u.name}</p>
+                <Chip tone={u.shiftStart ? "cool" : "mut"} className="text-[10px]">
+                  <Clock3 size={10} className="mr-1" /> {getDisplayShift(u)}
+                </Chip>
+              </div>
+              <p className="mt-0.5 truncate font-mono text-[10.5px] text-faint">{u.employeeId} · {u.department}</p>
+            </div>
+            <button onClick={() => setEditUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-cool/50 hover:text-cool" aria-label="Edit shift">
+              <Pencil size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <ShiftEditorSheet user={editUser} onClose={() => setEditUser(null)} onSaved={async () => setProfiles(await workspaceProfiles())} />
+    </div>
+  );
+}
+
+/* ------------ shift editor modal ------------ */
+function ShiftEditorSheet({ user, onClose, onSaved }: { user: User | null; onClose: () => void; onSaved: () => Promise<void> }) {
+  const db = getDB();
+  const t = useT();
+  const [shiftStart, setShiftStart] = useState("");
+  const [shiftEnd, setShiftEnd] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setShiftStart(user.shiftStart || "");
+      setShiftEnd(user.shiftEnd || "");
+    }
+  }, [user]);
+
+  if (!db || !user) return null;
+
+  const handleAutoCalcEnd = (start: string) => {
+    if (!start) {
+      setShiftEnd("");
+      return;
+    }
+    const [h, m] = start.split(":").map(Number);
+    const endDate = new Date(2000, 0, 1, h + 9, m);
+    const endStr = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+    setShiftEnd(endStr);
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await updateProfileShiftRemote(user.id, shiftStart || null, shiftEnd || null);
+      updateUserShift(user.id, shiftStart || null, shiftEnd || null);
+      await refreshProductionData();
+      await onSaved();
+      toast(`${user.name}'s shift updated.`, "ok");
+      onClose();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not update shift", "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    try {
+      setSaving(true);
+      await updateProfileShiftRemote(user.id, null, null);
+      updateUserShift(user.id, null, null);
+      await refreshProductionData();
+      await onSaved();
+      toast(`${user.name}'s shift reset to default.`, "ok");
+      onClose();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not reset shift", "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet open={!!user} onClose={onClose} title={`${user.name} — Shift Creator`}>
+      <div className="space-y-4">
+        <div className="card2 flex items-center gap-3 p-3">
+          <Avatar user={user} size={40} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold text-ink">{user.name}</p>
+            <p className="font-mono text-[10.5px] text-faint">{user.employeeId} · {user.department}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-line/60 bg-panel2/50 p-3">
+          <p className="text-[11px] text-faint mb-2">Current Shift</p>
+          <p className="font-mono text-[12px] text-ink font-semibold">
+            {shiftStart && shiftEnd ? `${shiftStart} — ${shiftEnd}` : shiftStart ? `${shiftStart} — (auto +9h)` : "Default workspace baseline"}
+          </p>
+          <p className="text-[10px] text-faint mt-1">Default: {db.settings.lateTime} — +9 hours</p>
+        </div>
+
+        <Field label="Shift Start Time (HH:MM)">
+          <div className="flex gap-2">
+            <input
+              type="time"
+              className="inp flex-1"
+              value={shiftStart}
+              onChange={(e) => {
+                setShiftStart(e.target.value);
+                handleAutoCalcEnd(e.target.value);
+              }}
+            />
+            <Btn variant="ghost" onClick={() => { setShiftStart(""); setShiftEnd(""); }} disabled={!shiftStart} title="Clear start time">
+              <X size={14} />
+            </Btn>
+          </div>
+        </Field>
+
+        <Field label="Shift End Time (HH:MM)">
+          <input
+            type="time"
+            className="inp"
+            value={shiftEnd}
+            onChange={(e) => setShiftEnd(e.target.value)}
+            disabled={!shiftStart}
+            placeholder="Auto-calculated (start + 9h) if not set"
+          />
+        </Field>
+
+        <p className="text-[10px] text-faint leading-relaxed">
+          Set a custom daily shift window for this employee. If left blank, the system will use the default workspace late time and add 9 hours. This shift baseline is used for attendance validation and overtime calculations.
+        </p>
+
+        <div className="flex gap-2">
+          <Btn className="flex-1" busy={saving} onClick={handleSave} disabled={!shiftStart}>
+            <Check size={15} /> {user.shiftStart ? "Update Shift" : "Create Shift"}
+          </Btn>
+          {user.shiftStart && (
+            <Btn variant="ghost" tone="bad" busy={saving} onClick={handleClear} className="flex-1">
+              <Trash2 size={14} /> Reset to Default
+            </Btn>
+          )}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
 /* ---------------- supabase deploy ---------------- */
 const MIGRATIONS = [
   "verify project credentials …", "check workspace schema …", "initialize Supabase client …",

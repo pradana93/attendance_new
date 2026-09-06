@@ -17,6 +17,14 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.3.0", date: new Date().toISOString().slice(0, 10), name: "Warehouse Shift Creator",
+    items: [
+      { tag: "new", text: "Introduced per-user Shift Creator in Admin tab for setting customized daily start/end times per employee." },
+      { tag: "new", text: "Shift baseline stored per-user and used for Clock In/Out attendance validation and overtime calculations." },
+      { tag: "improved", text: "Auto-calculated 9-hour shift duration when only start time is set; supports custom flexible shift windows." }
+    ],
+  },
+  {
     version: "2.2.2", date: new Date().toISOString().slice(0, 10), name: "Piket Rewards Full CRUD Control",
     items: [
       { tag: "new", text: "Added administrative controls to Add, Edit, Update, and soft-remove (Retire) individual reward catalog items directly from the Piket Rewards tab." },

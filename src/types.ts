@@ -19,6 +19,8 @@ export interface User {
   tutorialCompleted?: boolean;
   tutorialVersion?: number;
   tutorialStep?: number;
+  shiftStart?: string; // HH:mm (defaults to db.settings.lateTime)
+  shiftEnd?: string;   // HH:mm (defaults to shiftStart + 9h)
 }
 
 export interface Attendance {

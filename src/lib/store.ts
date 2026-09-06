@@ -263,7 +263,7 @@ function mulberry(a: number) {
 }
 
 /* ================= constants ================= */
-export const APP_VERSION = "2.2.2";
+export const APP_VERSION = "2.3.0";
 
 /* ================= lifecycle ================= */
 export function initStore() {
@@ -740,6 +740,15 @@ export function updateUser(userId: string, patch: { name: string; email: string;
   pushNotif(userId, "Profile updated", `Your account details were changed by an admin${oldName !== u.name ? ` (now ${u.name})` : ""}.`);
   mutate();
   return { ok: true, msg: `${u.name}'s account updated.` };
+}
+
+export function updateUserShift(userId: string, shiftStart: string | null, shiftEnd: string | null) {
+  if (!cache) return;
+  const u = userById(userId);
+  if (!u) return;
+  u.shiftStart = shiftStart || undefined;
+  u.shiftEnd = shiftEnd || undefined;
+  mutate();
 }
 
 export function enrollFace(userId: string) {
