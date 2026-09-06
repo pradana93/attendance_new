@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Boxes, ChevronLeft, ChevronRight, Database, Fingerprint, Loader2, MapPin, ShieldCheck, Upload } from "lucide-react";
-import { completeSetup } from "../lib/store";
+import { completeSetup, hasWorkspace } from "../lib/store";
 import { Btn, Field, toast } from "../components/ui";
 import { locateWithFallback, wait } from "../lib/util";
 
@@ -8,6 +8,7 @@ const STEPS = ["Workspace", "Site & geofence", "Admin account", "Initialize"];
 const HUES = [38, 16, 160, 210, 280, 96, 340, 48];
 
 export default function SetupWizard() {
+  const alreadyConfigured = hasWorkspace();
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   // workspace
@@ -30,6 +31,17 @@ export default function SetupWizard() {
   // init
   const [initStep, setInitStep] = useState(-1);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  if (alreadyConfigured) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-8">
+        <section className="card p-5 text-center">
+          <p className="ttl text-[15px] font-bold text-ink">Workspace already installed</p>
+          <p className="mt-2 font-mono text-[11px] leading-relaxed text-faint">First-time setup is locked because this installation already has a workspace. Sign in with your administrator account.</p>
+        </section>
+      </main>
+    );
+  }
 
   const next = () => {
     if (step === 2) {

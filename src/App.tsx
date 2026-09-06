@@ -43,6 +43,7 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [authChecking, setAuthChecking] = useState(true);
   const [cloudReady, setCloudReady] = useState(hasProductionConfiguration);
+  const [showSetup, setShowSetup] = useState(false);
   const [cur, setCur] = useState<User | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   useEffect(() => {
@@ -70,12 +71,13 @@ export default function App() {
 
   if (booting) return <Splash />;
   if (!db) return null;
+  if (showSetup) return <ProductionSetup onReady={() => { setCloudReady(true); setShowSetup(false); }} />;
   if (!cloudReady) return <ProductionSetup onReady={() => setCloudReady(true)} />;
   if (authChecking) return <Splash />;
   if (!cur)
     return (
       <>
-        <Login onLogin={setCur} onSetup={() => setCloudReady(false)} onChangelog={() => setChangelogOpen(true)} />
+        <Login onLogin={setCur} onSetup={() => setShowSetup(true)} onChangelog={() => setChangelogOpen(true)} />
         <ChangelogSheet open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </>
     );
