@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Boxes, CheckCircle2, History, LogIn } from "lucide-react";
+import { ArrowRight, Boxes, CheckCircle2, History, LogIn, Eye, EyeOff } from "lucide-react";
 import { getDB } from "../lib/store";
 import { signIn } from "../lib/production";
 import { Btn, Field, toast } from "../components/ui";
@@ -12,6 +12,7 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
   const t = useT();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
@@ -63,7 +64,25 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
           <input className="inp" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
         </Field>
         <Field label="Password">
-          <input className="inp" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" required />
+          <div className="relative">
+            <input 
+              className="inp w-full pr-10" 
+              type={showPassword ? "text" : "password"} 
+              autoComplete="current-password" 
+              value={pw} 
+              onChange={(e) => setPw(e.target.value)} 
+              placeholder="••••••••" 
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-ink tap p-1"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </Field>
         {err && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-[12.5px] text-bad">{err}</p>}
         <Btn className="w-full py-3 text-[15px]" busy={busy}>
