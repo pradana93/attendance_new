@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import confetti from "canvas-confetti";
 import {
   AlertTriangle, ArrowLeftRight, Bell as BellIcon, Camera, Check, ChevronRight, Clock3,
@@ -834,6 +835,7 @@ function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
   const t = useT();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   if (!db) return null;
   const needle = q.trim().toLowerCase();
 
@@ -881,7 +883,7 @@ function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="card flex items-center gap-2.5 px-3.5 py-2.5">
         <Search size={16} className="shrink-0 text-faint" />
         <input
@@ -897,29 +899,32 @@ function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
           </button>
         )}
       </div>
-      {open && needle && (
-        <div className="a-drop absolute inset-x-0 top-full z-[75] mt-1.5 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
-          {hits.length === 0 ? (
-            <p className="px-4 py-5 text-center font-mono text-[11.5px] text-faint">{t("sr.noResults")}</p>
-          ) : (
-            <div className="divide-y divide-line2">
-              {hits.map((h, i) => {
-                const Ic = ICON[h.kind];
-                return (
-                  <button key={i} onClick={h.go}
-                    className="tap flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-panel2">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber/12 text-amber"><Ic size={15} /></span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-ink">{h.title}</p>
-                      <p className="truncate font-mono text-[10.5px] text-faint">{h.sub}</p>
-                    </div>
-                    <Chip tone="mut">{LABEL[h.kind]}</Chip>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {open && needle && createPortal(
+        <div className="fixed inset-0 z-[75]" onClick={() => setOpen(false)}>
+          <div className="absolute left-4 right-4 top-20 max-h-96 overflow-y-auto rounded-xl border border-line bg-panel shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+            {hits.length === 0 ? (
+              <p className="px-4 py-5 text-center font-mono text-[11.5px] text-faint">{t("sr.noResults")}</p>
+            ) : (
+              <div className="divide-y divide-line2">
+                {hits.map((h, i) => {
+                  const Ic = ICON[h.kind];
+                  return (
+                    <button key={i} onClick={(e) => { e.stopPropagation(); h.go(); }}
+                      className="tap flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-panel2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber/12 text-amber"><Ic size={15} /></span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-ink">{h.title}</p>
+                        <p className="truncate font-mono text-[10.5px] text-faint">{h.sub}</p>
+                      </div>
+                      <Chip tone="mut">{LABEL[h.kind]}</Chip>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
