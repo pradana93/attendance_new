@@ -336,16 +336,21 @@ export function punch(userId: string, kind: "in" | "out", opts: { score?: number
   if (!cache) return null;
   const now = new Date();
   let rec = todayRecord(userId);
-  const late = kind === "in" && `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` > cache.settings.lateTime;
+  const user = userById(userId);
   if (!rec) {
     rec = { id: uid(), userId, date: todayKey(), late: false, early: false };
     cache.attendance.push(rec);
   }
-  if (kind === "in") Object.assign(rec, { checkIn: now.toISOString(), inScore: opts.score, distance: opts.distance, method: opts.method, late });
-  else {
+  if (kind === "in") {
+    const nowTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const shiftStart = user?.shiftStart || cache.settings.lateTime;
+    const late = nowTimeStr > shiftStart;
+    Object.assign(rec, { checkIn: now.toISOString(), inScore: opts.score, distance: opts.distance, method: opts.method, late });
+  } else {
     const early = now.getHours() < 16;
     Object.assign(rec, { checkOut: now.toISOString(), outScore: opts.score, early });
   }
+  const late = kind === "in" && rec.late;
   if (userById(userId)?.notifApproval) pushNotif(userId, kind === "in" ? "Check-in recorded" : "Check-out recorded", `${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${opts.method === "face" ? `face match ${opts.score}%` : "QR badge"}${late ? " · late" : ""}`);
   mutate();
   return rec;
@@ -356,7 +361,10 @@ export function selfReport(userId: string) {
   let rec = todayRecord(userId);
   if (!rec) { rec = { id: uid(), userId, date: todayKey(), late: false, early: false }; cache.attendance.push(rec); }
   const now = new Date();
-  if (!rec.checkIn) Object.assign(rec, { checkIn: now.toISOString(), method: "manual", selfReport: true, late: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` > cache.settings.lateTime });
+  const user = userById(userId);
+  const shiftStart = user?.shiftStart || cache.settings.lateTime;
+  const nowTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (!rec.checkIn) Object.assign(rec, { checkIn: now.toISOString(), method: "manual", selfReport: true, late: nowTimeStr > shiftStart });
   else if (!rec.checkOut) Object.assign(rec, { checkOut: now.toISOString(), selfReport: true });
   cache.users.filter((u) => u.role !== "staff").forEach((a) => pushNotif(a.id, "Self-report submitted", `${userName(userId)} logged attendance manually — please review in Live board.`));
   mutate();
@@ -369,7 +377,9 @@ export function manualLog(userId: string, date: string, checkIn: string, checkOu
   const inISO = new Date(parseKey(date)); inISO.setHours(h, m, 0, 0);
   let outISO: string | undefined;
   if (checkOut) { const [h2, m2] = checkOut.split(":").map(Number); const o = new Date(parseKey(date)); o.setHours(h2, m2, 0, 0); outISO = o.toISOString(); }
-  const late = checkIn > cache.settings.lateTime;
+  const user = userById(userId);
+  const shiftStart = user?.shiftStart || cache.settings.lateTime;
+  const late = checkIn > shiftStart;
   if (rec) Object.assign(rec, { checkIn: inISO.toISOString(), checkOut: outISO ?? rec.checkOut, method: "manual" as const, late });
   else cache.attendance.push({ id: uid(), userId, date, checkIn: inISO.toISOString(), checkOut: outISO, late, early: false, method: "manual" });
   pushNotif(userId, "Attendance adjusted", `Admin logged your attendance for ${fmtDate(date)}.`);

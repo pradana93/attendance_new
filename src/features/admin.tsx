@@ -262,7 +262,9 @@ function LiveBoard() {
           </div>
           <Btn className="w-full" onClick={async () => {
             if (!mUser) { toast("Pick an employee first", "err"); return; }
-            try { await manualAttendanceRemote({ userId: mUser, date: mDate, checkIn: mIn, checkOut: mOut || undefined, late: mIn > db.settings.lateTime }); await refreshProductionData(); toast(`Saved for ${userName(mUser)}`); setShowManual(false); }
+            const selectedUser = db.users.find((u) => u.id === mUser);
+            const shiftStart = selectedUser?.shiftStart || db.settings.lateTime;
+            try { await manualAttendanceRemote({ userId: mUser, date: mDate, checkIn: mIn, checkOut: mOut || undefined, late: mIn > shiftStart }); await refreshProductionData(); toast(`Saved for ${userName(mUser)}`); setShowManual(false); }
             catch (error) { toast(error instanceof Error ? error.message : "Could not save attendance", "err"); }
           }}>{t("a.saveRecord")}</Btn>
           <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">{t("a.audit")}</p>
