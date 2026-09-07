@@ -157,7 +157,7 @@ export async function workspaceSettings(): Promise<Partial<Settings> | null> {
   const workspaceId = await currentWorkspaceId(client);
   if (!workspaceId) return null;
   const [{ data: workspace }, { data: preferences }] = await Promise.all([
-    client.from("workspaces").select("name, company, site_name, logo_url, hue, latitude, longitude, geofence_radius, late_time").eq("id", workspaceId).maybeSingle(),
+    client.from("workspaces").select("name, company, site_name, logo_url, hue, latitude, longitude, geofence_radius, late_time, default_shift_duration, ot_alert_threshold, auto_log_ot").eq("id", workspaceId).maybeSingle(),
     client.from("workspace_settings").select("language, theme, points_expiry_months, overtime_rate").eq("workspace_id", workspaceId).maybeSingle(),
   ]);
   if (!workspace) return null;
@@ -175,6 +175,9 @@ export async function workspaceSettings(): Promise<Partial<Settings> | null> {
     theme: preferences?.theme,
     pointsExpiryMonths: preferences?.points_expiry_months,
     otRate: preferences?.overtime_rate,
+    defaultShiftDuration: workspace.default_shift_duration ?? 9,
+    otAlertThreshold: workspace.ot_alert_threshold ?? 30,
+    autoLogOT: workspace.auto_log_ot ?? false,
   };
 }
 
@@ -193,6 +196,9 @@ export async function saveWorkspaceSettings(patch: Partial<Settings>): Promise<v
   if (patch.lng !== undefined) workspacePatch.longitude = patch.lng;
   if (patch.radius !== undefined) workspacePatch.geofence_radius = patch.radius;
   if (patch.lateTime !== undefined) workspacePatch.late_time = patch.lateTime;
+  if (patch.defaultShiftDuration !== undefined) workspacePatch.default_shift_duration = patch.defaultShiftDuration;
+  if (patch.otAlertThreshold !== undefined) workspacePatch.ot_alert_threshold = patch.otAlertThreshold;
+  if (patch.autoLogOT !== undefined) workspacePatch.auto_log_ot = patch.autoLogOT;
   if (Object.keys(workspacePatch).length) {
     const { error } = await client.from("workspaces").update(workspacePatch).eq("id", workspaceId);
     if (error) throw new Error(error.message);

@@ -161,6 +161,9 @@ export interface Settings {
   otRate: number; // IDR per hour
   language: Lang;
   supabase: SupaCfg;
+  defaultShiftDuration?: number; // Hours (default 9)
+  otAlertThreshold?: number; // Minutes (default 30)
+  autoLogOT?: boolean; // Auto-log if >60 min past shift (default false)
 }
 
 /** Shift handover note — outgoing crew briefs the incoming crew */

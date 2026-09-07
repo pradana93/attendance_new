@@ -15,6 +15,7 @@ const defaultSettings: Settings = {
   appName: "ShiftGate", company: "", siteName: "",
   lat: -6.1754, lng: 106.8272, radius: 100, lateTime: "08:15", theme: "dark", hue: 38,
   pointsExpiryMonths: 12, otRate: 25000, language: "en",
+  defaultShiftDuration: 9, otAlertThreshold: 30, autoLogOT: false,
   supabase: { url: "", key: "", status: "off" },
 };
 

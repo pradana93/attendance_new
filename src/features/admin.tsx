@@ -958,13 +958,13 @@ function ConfigPanel() {
           <p className="ttl text-[12px] font-bold text-ink mb-3">⏰ Shift Creator Settings</p>
           <div className="space-y-3">
             <Field label="Default Shift Duration (hours)" hint="When only start time is set">
-              <input className="inp w-full font-mono" type="number" step={0.5} min={1} max={16} defaultValue={9} placeholder="9" />
+              <input className="inp w-full font-mono" type="number" step={0.5} min={1} max={16} value={s.defaultShiftDuration || 9} onChange={(e) => updateSettings({ defaultShiftDuration: Math.max(1, Math.min(16, Number(e.target.value) || 9)) })} />
             </Field>
             <Field label="OT Alert Threshold (minutes)" hint="Notify staff if working N minutes past shift">
-              <input className="inp w-full font-mono" type="number" step={5} min={0} max={180} defaultValue={30} placeholder="30" />
+              <input className="inp w-full font-mono" type="number" step={5} min={0} max={180} value={s.otAlertThreshold || 30} onChange={(e) => updateSettings({ otAlertThreshold: Math.max(0, Math.min(180, Number(e.target.value) || 30)) })} />
             </Field>
             <div className="flex items-center gap-2.5">
-              <input type="checkbox" id="autoLogOT" defaultChecked={false} className="w-4 h-4 accent-amber" />
+              <input type="checkbox" id="autoLogOT" checked={s.autoLogOT || false} onChange={(e) => updateSettings({ autoLogOT: e.target.checked })} className="w-4 h-4 accent-amber" />
               <label htmlFor="autoLogOT" className="text-[12.5px] font-medium text-ink cursor-pointer">Auto-log OT if working more than 60 minutes past shift</label>
             </div>
           </div>
