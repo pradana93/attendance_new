@@ -898,7 +898,7 @@ function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
         )}
       </div>
       {open && needle && (
-        <div className="a-drop absolute inset-x-0 top-full z-30 mt-1.5 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+        <div className="a-drop absolute inset-x-0 top-full z-[75] mt-1.5 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
           {hits.length === 0 ? (
             <p className="px-4 py-5 text-center font-mono text-[11.5px] text-faint">{t("sr.noResults")}</p>
           ) : (
