@@ -58,8 +58,8 @@ export function getShiftStart(user: User, settings: Settings): string {
 /**
  * Get user's effective shift end time
  * - Uses user.shiftEnd if defined
- * - Calculates shiftStart + 9 hours if only start is defined
- * - Falls back to workspace lateTime + 9 hours
+ * - Calculates shiftStart + defaultShiftDuration if only start is defined
+ * - Falls back to workspace lateTime + defaultShiftDuration
  * 
  * @param user User object with optional shiftStart/shiftEnd
  * @param settings Workspace settings
@@ -68,7 +68,8 @@ export function getShiftStart(user: User, settings: Settings): string {
 export function getShiftEnd(user: User, settings: Settings): string {
   if (user.shiftEnd) return user.shiftEnd;
   const start = getShiftStart(user, settings);
-  return addHours(start, 9);
+  const duration = settings.defaultShiftDuration ?? 9;
+  return addHours(start, duration);
 }
 
 /**
