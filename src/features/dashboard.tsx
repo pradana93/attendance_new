@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import {
   AlertTriangle, ArrowLeftRight, Bell as BellIcon, Camera, Check, ChevronRight, Clock3,
-  ClipboardList, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun, MapPin, Megaphone,
+  ClipboardList, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun, MapPin, Megaphone, Moon,
   QrCode, ScanFace, Search, Send, Star, Sun, Thermometer, Timer, User as UserIcon, Wind, XCircle,
 } from "lucide-react";
 import type { Announcement, Attendance, PiketLog, PiketTask, User } from "../types";
-import { getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName, refreshProductionData } from "../lib/store";
+import { getDB, leaderboard, myPiketToday, selfReport, statsFor, todayRecord, userName, refreshProductionData, updateSettings } from "../lib/store";
 import { completePiketRemote } from "../lib/production";
 import { punchAttendance, todayAttendance } from "../lib/production";
 import { isClockInLate, isClockOutEarly, getTimeFromISO } from "../lib/shifts";
@@ -114,7 +114,16 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
             {t(greetKey as "d.greet0")}, {user.name.split(" ")[0]} <span className="text-amber">·</span>
           </h1>
         </div>
-        <Chip tone="amber">{user.employeeId}</Chip>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => updateSettings({ theme: db?.settings.theme === "dark" ? "light" : "dark" })}
+            className="tap flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-panel2 hover:border-amber/50 hover:bg-panel2/80"
+            title={db?.settings.theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {db?.settings.theme === "dark" ? <Sun size={16} className="text-amber" /> : <Moon size={16} className="text-cool" />}
+          </button>
+          <Chip tone="amber">{user.employeeId}</Chip>
+        </div>
       </div>
 
       {/* global search */}
