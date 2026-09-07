@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock, X,
+  Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock, X, Palette,
 } from "lucide-react";
 import type { Lang, User } from "../types";
 import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
@@ -8,6 +8,7 @@ import { createLeaveRequest, setNotificationPreferenceRemote, signOut } from "..
 import { refreshProductionData } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
 import { useT } from "../lib/i18n";
+import { ThemeSelector } from "../components/theme-selector";
 import { getShiftWindow, getShiftStatusTone } from "../lib/shifts";
 import { VERSION } from "../lib/changelog";
 import { Avatar, Btn, Chip, Confirm, Empty, Field, SectionTitle, Seg, Sheet, StatusBadge, Toggle, toast } from "../components/ui";
@@ -18,6 +19,7 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
   const db = getDB();
   const t = useT();
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [date, setDate] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -341,13 +343,13 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           <Seg small options={[{ id: "en", label: "English" }, { id: "id", label: "Indonesia" }]}
             value={s.language} onChange={(v) => { updateSettings({ language: v as Lang }); toast(v === "id" ? "Bahasa Indonesia aktif" : "Language set to English"); }} />
         </div>
-        <div className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => setThemeOpen(true)} className="tap flex w-full items-center justify-between px-4 py-3 text-left hover:bg-panel2">
           <div className="flex items-center gap-2.5">
-            {s.theme === "dark" ? <Moon size={15} className="text-cool" /> : <Sun size={15} className="text-amber" />}
-            <p className="text-[13px] font-semibold text-ink">{t("a.night")}</p>
+            <Palette size={15} className="text-amber" />
+            <p className="text-[13px] font-semibold text-ink">Theme</p>
           </div>
-          <Toggle on={s.theme === "dark"} onChange={(v) => updateSettings({ theme: v ? "dark" : "light" })} />
-        </div>
+          <p className="text-[12px] text-mut capitalize">{s.theme}</p>
+        </button>
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
             <Bell size={15} className="text-amber" />
@@ -410,6 +412,8 @@ export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: 
           }}><Plane size={15} /> {t("m.submit")}</Btn>
         </div>
       </Sheet>
+
+      <ThemeSelector open={themeOpen} onClose={() => setThemeOpen(false)} currentTheme={s.theme} />
 
       <Confirm open={confirmOut} onClose={() => setConfirmOut(false)} danger
         title={t("c.logoutQ")} body={t("c.logoutBody")} yesLabel={t("c.logout")}

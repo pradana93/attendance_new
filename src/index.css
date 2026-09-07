@@ -76,6 +76,44 @@
   --grid: rgba(21, 27, 35, 0.05);
   color-scheme: light;
 }
+[data-theme="contrast"] {
+  --bg: #000000;
+  --panel: #0d0d0d;
+  --panel2: #1a1a1a;
+  --line: #333333;
+  --line2: #262626;
+  --ink: #ffffff;
+  --mut: #d0d0d0;
+  --faint: #999999;
+  --amber: #ffcc00;
+  --amberd: #e6b800;
+  --ok: #00ff00;
+  --bad: #ff0000;
+  --cool: #00ccff;
+  --glow1: rgba(255, 204, 0, 0.1);
+  --glow2: rgba(0, 204, 255, 0.08);
+  --grid: rgba(200, 200, 200, 0.08);
+  color-scheme: dark;
+}
+[data-theme="amber"] {
+  --bg: #1a1410;
+  --panel: #2b2015;
+  --panel2: #3d2817;
+  --line: #5c4620;
+  --line2: #4a3818;
+  --ink: #f5e6d3;
+  --mut: #d4af77;
+  --faint: #a89664;
+  --amber: #ffc400;
+  --amberd: #ff9800;
+  --ok: #66bb6a;
+  --bad: #ef5350;
+  --cool: #4dd0e1;
+  --glow1: rgba(255, 196, 0, 0.08);
+  --glow2: rgba(77, 208, 225, 0.06);
+  --grid: rgba(212, 175, 119, 0.05);
+  color-scheme: dark;
+}
 
 @theme inline {
   --color-bg: var(--bg);
