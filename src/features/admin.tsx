@@ -25,7 +25,7 @@ import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from
 
 export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "cloud" | "config";
 type Sec = AdminSec;
-export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper"] as const;
+export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper", "Stock Keeper Leader", "Stock Keeper", "Picker"] as const;
 const DEPTS = [...DEPARTMENTS];
 
 export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSec: (s: Sec) => void }) {

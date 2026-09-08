@@ -37,7 +37,7 @@ Deno.serve(async (request) => {
   if (!body.name?.trim() || !body.email?.includes("@") || !body.password || body.password.length < 8) {
     return json({ error: "Name, valid email, and an 8-character password are required" }, 400);
   }
-  const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper"] as const;
+  const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper", "Stock Keeper Leader", "Stock Keeper", "Picker"] as const;
   if (!body.employeeId?.trim() || !body.department?.trim()) {
     return json({ error: "Employee ID and department are required" }, 400);
   }

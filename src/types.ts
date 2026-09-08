@@ -1,7 +1,7 @@
 export type Role = "superadmin" | "admin" | "staff";
 export type Lang = "en" | "id";
 export type Tone = "morning" | "afternoon" | "night";
-export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper"] as const;
+export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper", "Stock Keeper Leader", "Stock Keeper", "Picker"] as const;
 export type Department = typeof DEPARTMENTS[number];
 
 export interface User {
