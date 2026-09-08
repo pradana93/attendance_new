@@ -28,6 +28,15 @@ type Sec = AdminSec;
 export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper", "Stock Keeper Leader", "Stock Keeper", "Picker"] as const;
 const DEPTS = [...DEPARTMENTS];
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function SaveBadge({ state }: { state: SaveState }) {
+  if (state === "idle") return null;
+  const tone = state === "saved" ? "ok" : state === "saving" ? "cool" : "bad";
+  const label = state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Save failed";
+  return <Chip tone={tone} className="shrink-0">{label}</Chip>;
+}
+
 export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSec: (s: Sec) => void }) {
   const db = getDB();
   const t = useT();
@@ -138,6 +147,45 @@ function FloorRadar({ onDutyIds }: { onDutyIds: string[] }) {
   );
 }
 
+function DepartmentCoverageBoard() {
+  const db = getDB();
+  const t = useT();
+  if (!db) return null;
+
+  const today = todayKey();
+  const departments = [...new Set(db.users.map((u) => u.department))].sort((a, b) => a.localeCompare(b));
+  const rows = departments.map((department) => {
+    const activeUsers = db.users.filter((u) => u.department === department && u.active);
+    const activeIds = new Set(activeUsers.map((u) => u.id));
+    const onDuty = db.attendance.filter((a) => a.date === today && a.checkIn && !a.checkOut && activeIds.has(a.userId)).length;
+    const late = db.attendance.filter((a) => a.date === today && a.late && activeIds.has(a.userId)).length;
+    return { department, staff: activeUsers.length, onDuty, late };
+  });
+
+  return (
+    <div className="card p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="ttl text-[12px] font-bold text-ink">Department coverage</p>
+        <Chip tone="mut">today</Chip>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.department} className="flex items-center justify-between rounded-lg border border-line2 bg-panel2/60 px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-[12.5px] font-semibold text-ink">{row.department}</p>
+              <p className="font-mono text-[10px] text-faint">{row.staff} staff</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Chip tone="cool">{row.onDuty} {t("a.onDuty")}</Chip>
+              <Chip tone={row.late > 0 ? "bad" : "ok"}>{row.late} late</Chip>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- live board ---------------- */
 function LiveBoard() {
   const db = getDB();
@@ -159,6 +207,7 @@ function LiveBoard() {
 
   return (
     <div className="a-fadein space-y-3">
+      <DepartmentCoverageBoard />
       <div className="grid grid-cols-3 gap-2.5">
         <div className="card p-3">
           <div className="flex items-center gap-1.5 text-ok"><LiveDot /><span className="ttl text-[10.5px] font-bold text-mut">{t("a.onDuty")}</span></div>
@@ -279,6 +328,7 @@ function LiveBoard() {
 function StaffPanel({ admin }: { admin: User }) {
   const db = getDB();
   const t = useT();
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -299,18 +349,31 @@ function StaffPanel({ admin }: { admin: User }) {
   const save = async () => {
     if (!name.trim() || !email.includes("@") || pw.length < 8) { toast("Name, valid email, and an 8-character password are required", "err"); return; }
     setSaving(true);
-    const res = await createStaffAccount({ name: name.trim(), email: email.trim(), employeeId: nextId, role: role === "admin" ? "admin" : "staff", department: dept, password: pw });
-    setSaving(false);
-    if (!res.ok) { toast(res.message, "err"); return; }
-    if (res.profile) setProfiles((current) => [...current, res.profile!]);
-    toast(`${res.message} Login credentials are ready.`, "ok");
-    setShowAdd(false); setName(""); setEmail(""); setPw(genPw());
+    setSaveState("saving");
+    try {
+      const res = await createStaffAccount({ name: name.trim(), email: email.trim(), employeeId: nextId, role: role === "admin" ? "admin" : "staff", department: dept, password: pw });
+      if (!res.ok) {
+        setSaveState("error");
+        toast(res.message, "err");
+        return;
+      }
+      if (res.profile) setProfiles((current) => [...current, res.profile!]);
+      setSaveState("saved");
+      toast(`${res.message} Login credentials are ready.`, "ok");
+      setShowAdd(false); setName(""); setEmail(""); setPw(genPw());
+    } finally {
+      setSaving(false);
+      window.setTimeout(() => setSaveState("idle"), 1200);
+    }
   };
 
   return (
     <div className="a-fadein space-y-3">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.active).length} {t("a.active")}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.active).length} {t("a.active")}</p>
+          <SaveBadge state={saveState} />
+        </div>
         <Btn className="!px-3 !py-2" onClick={() => setShowAdd(true)}><UserPlus size={15} /> {t("a.add")}</Btn>
       </div>
       <div className="space-y-2">
@@ -556,6 +619,7 @@ function NoticePanel({ admin }: { admin: User }) {
 function ShiftsPanel({ admin }: { admin: User }) {
   const db = getDB();
   const t = useT();
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [profiles, setProfiles] = useState<User[]>([admin]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -580,7 +644,10 @@ function ShiftsPanel({ admin }: { admin: User }) {
   return (
     <div className="a-fadein space-y-3">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.shiftStart).length} custom shifts</p>
+        <div className="flex items-center gap-2">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-faint">{profiles.length} {t("a.accounts")} · {profiles.filter((u) => u.shiftStart).length} custom shifts</p>
+          <SaveBadge state={saveState} />
+        </div>
       </div>
       <div className="space-y-2">
         {loadingProfiles ? <div className="card p-4 text-center font-mono text-[11px] text-faint">Loading staff…</div> : profiles.map((u) => (
@@ -601,7 +668,15 @@ function ShiftsPanel({ admin }: { admin: User }) {
           </div>
         ))}
       </div>
-      <ShiftEditorSheet user={editUser} onClose={() => setEditUser(null)} onSaved={async () => setProfiles(await workspaceProfiles())} />
+      <ShiftEditorSheet
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onSaved={async () => {
+          setSaveState("saved");
+          window.setTimeout(() => setSaveState("idle"), 1200);
+          setProfiles(await workspaceProfiles());
+        }}
+      />
     </div>
   );
 }
@@ -636,6 +711,7 @@ function ShiftEditorSheet({ user, onClose, onSaved }: { user: User | null; onClo
 
   const handleSave = async () => {
     try {
+      // save state is managed by the parent panel through refresh callbacks
       setSaving(true);
       await updateProfileShiftRemote(user.id, shiftStart || null, shiftEnd || null);
       updateUserShift(user.id, shiftStart || null, shiftEnd || null);
@@ -652,6 +728,7 @@ function ShiftEditorSheet({ user, onClose, onSaved }: { user: User | null; onClo
 
   const handleClear = async () => {
     try {
+      // save state is managed by the parent panel through refresh callbacks
       setSaving(true);
       await updateProfileShiftRemote(user.id, null, null);
       updateUserShift(user.id, null, null);

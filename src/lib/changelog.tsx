@@ -17,6 +17,14 @@ const TAG_META: Record<Tag, { label: string; tone: "ok" | "cool" | "amber" | "ba
 
 export const RELEASES: Release[] = [
   {
+    version: "2.3.1", date: new Date().toISOString().slice(0, 10), name: "Additive UX hardening",
+    items: [
+      { tag: "improved", text: "Added save-status feedback for admin actions so saving can visibly succeed or fail." },
+      { tag: "new", text: "Added a read-only department coverage board on the Admin live screen using existing attendance data only." },
+      { tag: "improved", text: "Expanded the app changelog to reflect the new department set and stability-focused UI pass." },
+    ],
+  },
+  {
     version: "2.3.0", date: new Date().toISOString().slice(0, 10), name: "Warehouse Shift Creator",
     items: [
       { tag: "new", text: "Introduced per-user Shift Creator in Admin tab for setting customized daily start/end times per employee." },
