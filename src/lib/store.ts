@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
-  Announcement, Attendance, DB, Feedback, Handover, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
+  Announcement, Attendance, DB, Department, Feedback, Handover, Leave, Notif, Overtime, PiketAssignment, PiketLog, PiketTask,
   PointEvent, Redemption, RedeemItem, Role, Settings, SwapRequest, User,
 } from "../types";
 import { addDays, dayKey, fmtDate, hoursBetween, mondayOf, parseKey, todayKey, uid } from "./util";
@@ -57,7 +57,7 @@ const seedTasks = (): PiketTask[] => [
   { id: "t-suhu40", name: "Foto Suhu Container 40ft", area: "Gudang", points: 20, requiresProof: true, active: true, icon: "thermo", desc: "Photograph the thermometer reading of the 40ft container" },
 ];
 
-function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: string, hue: number, password = "shift123", faceEnrolled = true): User {
+function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: Department, hue: number, password = "shift123", faceEnrolled = true): User {
   void password;
   return { id, name, email, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
 }
@@ -83,16 +83,16 @@ function svgPhoto(label: string, date: string): string {
 
 function seed(): DB {
   const users: User[] = [
-    mkUser("u-admin", "Budi Santoso", "budi@company.com", "superadmin", "WMS-001", "Operations", 210),
-    mkUser("u-2", "Rina Wijaya", "rina@company.com", "admin", "WMS-002", "Operations", 330),
-    mkUser("u-3", "Agus Prasetyo", "agus@company.com", "staff", "WMS-003", "Inbound", 22),
-    mkUser("u-4", "Dewi Lestari", "dewi@company.com", "staff", "WMS-004", "Outbound", 152),
-    mkUser("u-5", "Joko Susilo", "joko@company.com", "staff", "WMS-005", "Inventory", 262),
+    mkUser("u-admin", "Budi Santoso", "budi@company.com", "superadmin", "WMS-001", "Manager", 210),
+    mkUser("u-2", "Rina Wijaya", "rina@company.com", "admin", "WMS-002", "Supervisor", 330),
+    mkUser("u-3", "Agus Prasetyo", "agus@company.com", "staff", "WMS-003", "Checker Inbound", 22),
+    mkUser("u-4", "Dewi Lestari", "dewi@company.com", "staff", "WMS-004", "Checker Outbound", 152),
+    mkUser("u-5", "Joko Susilo", "joko@company.com", "staff", "WMS-005", "Checker Packing", 262),
     mkUser("u-6", "Siti Rahma", "siti@company.com", "staff", "WMS-006", "Packing", 42),
-    mkUser("u-7", "Andi Saputra", "andi@company.com", "staff", "WMS-007", "Inbound", 192),
-    mkUser("u-8", "Maya Putri", "maya@company.com", "staff", "WMS-008", "QA", 302),
-    mkUser("u-9", "Fajar Hidayat", "fajar@company.com", "staff", "WMS-009", "Forklift", 122, "shift123", false),
-    mkUser("u-10", "Lina Marlina", "lina@company.com", "staff", "WMS-010", "Outbound", 2, "shift123", false),
+    mkUser("u-7", "Andi Saputra", "andi@company.com", "staff", "WMS-007", "Leader", 192),
+    mkUser("u-8", "Maya Putri", "maya@company.com", "staff", "WMS-008", "Helper", 302),
+    mkUser("u-9", "Fajar Hidayat", "fajar@company.com", "staff", "WMS-009", "Helper", 122, "shift123", false),
+    mkUser("u-10", "Lina Marlina", "lina@company.com", "staff", "WMS-010", "Checker Outbound", 2, "shift123", false),
   ];
   users[8].active = false;
 
@@ -288,7 +288,7 @@ export function rerunSetup() {
 
 export function completeSetup(args: { appName: string; company: string; logo?: string; hue: number; siteName: string; lat: number; lng: number; radius: number; adminName: string; adminEmail: string; adminPassword: string }) {
   initStore();
-  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Operations", args.hue, args.adminPassword);
+  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Manager", args.hue, args.adminPassword);
   cache = {
     ...emptyDB(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
@@ -712,7 +712,7 @@ export function deleteFeedback(id: string) {
 }
 
 /* ================= staff management ================= */
-export function addStaff(input: { name: string; email: string; employeeId: string; role: Role; department: string; password: string }): { ok: boolean; msg: string } {
+export function addStaff(input: { name: string; email: string; employeeId: string; role: Role; department: Department; password: string }): { ok: boolean; msg: string } {
   if (!cache) return { ok: false, msg: "Store not ready" };
   if (cache.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) return { ok: false, msg: "Email already registered." };
   cache.users.push(mkUser(uid(), input.name, input.email, input.role, input.employeeId, input.department, Math.floor(Math.random() * 360), input.password, false));
@@ -727,7 +727,7 @@ export function toggleActive(userId: string) {
 }
 
 /** Edit an existing account (admin/super admin only). Super Admin role is locked. */
-export function updateUser(userId: string, patch: { name: string; email: string; employeeId: string; role: Role; department: string }): { ok: boolean; msg: string } {
+export function updateUser(userId: string, patch: { name: string; email: string; employeeId: string; role: Role; department: Department }): { ok: boolean; msg: string } {
   if (!cache) return { ok: false, msg: "Store not ready" };
   const u = userById(userId);
   if (!u) return { ok: false, msg: "Account not found." };

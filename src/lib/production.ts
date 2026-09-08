@@ -1,6 +1,6 @@
 import type { SupabaseClient, User as SupabaseUser } from "@supabase/supabase-js";
 import { getSupabase, initSupabase, clearSupabase } from "./supabase";
-import type { Announcement, Attendance, Feedback, Leave, Overtime, PiketAssignment, PiketLog, PiketTask, PointEvent, RedeemItem, Redemption, Role, Settings, SwapOverride, SwapRequest, User } from "../types";
+import type { Announcement, Attendance, Department, Feedback, Leave, Overtime, PiketAssignment, PiketLog, PiketTask, PointEvent, RedeemItem, Redemption, Role, Settings, SwapOverride, SwapRequest, User } from "../types";
 import type { DB } from "../types";
 
 interface ProfileRow {
@@ -609,7 +609,7 @@ function mapProfile(row: ProfileRow): User {
     email: row.email,
     role: row.role,
     employeeId: row.employee_id,
-    department: row.department,
+    department: row.department as Department,
     avatarHue: 38,
     photo: row.avatar_url ?? undefined,
     faceEnrolled: Boolean(row.face_enrolled),

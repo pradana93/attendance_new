@@ -4,7 +4,7 @@ import {
   Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
   Radio, RefreshCw, ScanFace, Settings2, Sun, Trash2, UserPlus, Users, X,
 } from "lucide-react";
-import type { Lang, Role, User } from "../types";
+import type { Department, Lang, Role, User } from "../types";
 import {
   addAnnouncement, addPointEvent, connectSupabase, deleteAnnouncement, disconnectSupabase, enrollFace,
     getDB, manualLog, rerunSetup, reviewSelfReport, addPointEventLocal,
@@ -25,7 +25,8 @@ import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from
 
 export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "cloud" | "config";
 type Sec = AdminSec;
-const DEPTS = ["Inbound", "Outbound", "Inventory", "Packing", "QA", "Forklift", "Operations"];
+export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper"] as const;
+const DEPTS = [...DEPARTMENTS];
 
 export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSec: (s: Sec) => void }) {
   const db = getDB();
@@ -281,7 +282,7 @@ function StaffPanel({ admin }: { admin: User }) {
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [dept, setDept] = useState(DEPTS[0]);
+  const [dept, setDept] = useState<Department>(DEPTS[0] as Department);
   const [role, setRole] = useState<Role>("staff");
   const [pw, setPw] = useState(genPw());
   const [saving, setSaving] = useState(false);
@@ -346,7 +347,7 @@ function StaffPanel({ admin }: { admin: User }) {
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("a.empId")}><input className="inp font-mono" value={nextId} readOnly /></Field>
             <Field label={t("a.department")}>
-              <select className="inp" value={dept} onChange={(e) => setDept(e.target.value)}>
+              <select className="inp" value={dept} onChange={(e) => setDept(e.target.value as Department)}>
                 {DEPTS.map((d) => <option key={d}>{d}</option>)}
               </select>
             </Field>
@@ -381,12 +382,12 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [empId, setEmpId] = useState("");
-  const [dept, setDept] = useState(DEPTS[0]);
+  const [dept, setDept] = useState<Department>(DEPTS[0] as Department);
   const [role, setRole] = useState<Role>("staff");
   useEffect(() => {
     if (user) {
       setName(user.name); setEmail(user.email); setEmpId(user.employeeId);
-      setDept(DEPTS.includes(user.department) ? user.department : DEPTS[0]);
+      setDept((DEPTS as string[]).includes(user.department) ? (user.department as Department) : (DEPTS[0] as Department));
       setRole(user.role);
     }
   }, [user]);
@@ -409,9 +410,9 @@ function EditUserSheet({ user, onClose, onSaved }: { user: User | null; onClose:
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("a.empId")}><input className="inp font-mono" value={empId} onChange={(e) => setEmpId(e.target.value)} disabled={isSuper} /></Field>
             <Field label={t("a.department")}>
-              <select className="inp" value={dept} onChange={(e) => setDept(e.target.value)}>
+              <select className="inp" value={dept} onChange={(e) => setDept(e.target.value as Department)}>
                 {DEPTS.map((d) => <option key={d}>{d}</option>)}
-                {!DEPTS.includes(user.department) && <option>{user.department}</option>}
+                {!(DEPTS as string[]).includes(user.department) && <option>{user.department}</option>}
               </select>
             </Field>
           </div>
