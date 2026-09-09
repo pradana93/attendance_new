@@ -17,7 +17,8 @@ import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, hasProductionConfiguration, markNotificationRead, productionClient, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings, consumeRecoveryLink } from "./lib/production";
+import { currentProductionUser, hasProductionConfiguration, markNotificationRead, productionClient, saveTutorialState, signOut, subscribeWorkspaceChanges, subscribeLiveEvents, workspaceSettings, consumeRecoveryLink } from "./lib/production";
+import { showNotification } from "./lib/notifications";
 import { TutorialOverlay, type TutorialTarget } from "./features/tutorial";
 
 initStore();
@@ -112,7 +113,13 @@ export default function App() {
 
   useEffect(() => {
     if (!cur) return;
-    return subscribeWorkspaceChanges(() => { void refreshProductionData(); });
+    const offSync = subscribeWorkspaceChanges(() => { void refreshProductionData(); });
+    const offLive = subscribeLiveEvents({ myId: cur.id, isAdmin: cur.role !== "staff" }, (e) => {
+      if (!cur.notifApproval) return;
+      toast(e.title, "info");
+      showNotification(e.title, { body: e.body || undefined, tag: `live-${e.tab}-${Date.now()}`, url: `#/${e.tab}` });
+    });
+    return () => { offSync(); offLive(); };
   }, [cur?.id]);
 
   useEffect(() => {
@@ -186,7 +193,10 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
   const db = useDB();
   const t = useT();
   const isAdmin = user.role !== "staff";
-  const [nav, setNav] = useState<NavState>({ tab: "home", sec: "live" });
+  const [nav, setNav] = useState<NavState>(() => {
+    const m = (typeof window !== "undefined" ? window.location.hash : "").match(/^#\/(home|piket|stats|ot|fifth)(?:\/([\w-]+))?/);
+    return { tab: (m?.[1] as Tab) ?? "home", sec: (m?.[2] as AdminSec) ?? "live" };
+  });
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [clock, setClock] = useState(new Date());
@@ -200,6 +210,19 @@ function Shell({ user, onLogout, onChangelog }: { user: User; onLogout: () => vo
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
+  /* notification tap (service worker) → jump to the relevant tab */
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const url = (e.data as { type?: string; url?: string } | null)?.type === "OPEN_TAB"
+        ? (e.data as { url?: string }).url ?? ""
+        : "";
+      const m = url.match(/^#\/(home|piket|stats|ot|fifth)(?:\/([\w-]+))?/);
+      if (m) setNav({ tab: m[1] as Tab, sec: (m[2] as AdminSec) ?? "live" });
+    };
+    navigator.serviceWorker?.addEventListener?.("message", onMsg);
+    return () => navigator.serviceWorker?.removeEventListener?.("message", onMsg);
   }, []);
 
   const { tab, sec: adminSec } = nav;

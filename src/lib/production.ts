@@ -342,6 +342,73 @@ export function subscribeWorkspaceChanges(onChange: () => void): () => void {
   return () => { void client.removeChannel(channel); };
 }
 
+/** Targeted live-event alert derived from a realtime row (toast + OS notification) */
+export interface LiveEvent { title: string; body: string; tab: "home" | "piket" | "stats" | "ot" | "fifth" }
+
+/**
+ * Realtime INSERT/UPDATE alerts filtered to what matters to this user.
+ * Own actions are suppressed; admins also hear incoming requests.
+ * Works while the app is open or backgrounded (OS notify via SW).
+ * Closed-app delivery would need server Web Push (not wired).
+ */
+export function subscribeLiveEvents(ctx: { myId: string | null; isAdmin: boolean }, onEvent: (e: LiveEvent) => void): () => void {
+  const client = productionClient();
+  if (!client) return () => undefined;
+  const me = ctx.myId;
+  const pick = (row: unknown, ...keys: string[]): string => {
+    const r = row as Record<string, unknown>;
+    for (const k of keys) if (r?.[k] != null && String(r[k])) return String(r[k]);
+    return "";
+  };
+  const mine = (row: unknown, ...keys: string[]): boolean => !!me && keys.some((k) => (row as Record<string, unknown>)?.[k] === me);
+  const forMe = (row: unknown, ...keys: string[]): boolean => keys.some((k) => (row as Record<string, unknown>)?.[k] === me || (row as Record<string, unknown>)?.[k] === "*");
+  const decided = (row: unknown): boolean => ["approved", "rejected"].includes(String((row as Record<string, unknown>)?.status ?? ""));
+  const channel = client.channel("live-notify");
+
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "announcements" }, (p) => {
+    const row = p.new;
+    if (mine(row, "author_id")) return;
+    onEvent({ title: (row as Record<string, unknown>)?.pinned ? "Pinned announcement" : "New announcement", body: pick(row, "title"), tab: "home" });
+  });
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "overtime_requests" }, (p) => {
+    if (!ctx.isAdmin || mine(p.new, "user_id")) return;
+    onEvent({ title: "Overtime request", body: pick(p.new, "request_date", "created_at"), tab: "fifth" });
+  });
+  channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "overtime_requests" }, (p) => {
+    if (!decided(p.new) || !forMe(p.new, "user_id")) return;
+    onEvent({ title: `Overtime ${String((p.new as Record<string, unknown>).status)}`, body: pick(p.new, "request_date", "created_at"), tab: "ot" });
+  });
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "swap_requests" }, (p) => {
+    const row = p.new;
+    if (mine(row, "from_user_id")) return;
+    if (!forMe(row, "to_user_id") && !ctx.isAdmin) return;
+    onEvent({ title: "Swap request", body: pick(row, "reason", "work_date", "date"), tab: "piket" });
+  });
+  channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "swap_requests" }, (p) => {
+    if (!decided(p.new)) return;
+    if (!forMe(p.new, "from_user_id", "to_user_id")) return;
+    onEvent({ title: `Swap ${String((p.new as Record<string, unknown>).status)}`, body: pick(p.new, "reason", "work_date", "date"), tab: "piket" });
+  });
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "leave_requests" }, (p) => {
+    if (!ctx.isAdmin || mine(p.new, "user_id")) return;
+    onEvent({ title: "Leave request", body: pick(p.new, "leave_date", "created_at"), tab: "fifth" });
+  });
+  channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "leave_requests" }, (p) => {
+    if (!decided(p.new) || !forMe(p.new, "user_id")) return;
+    onEvent({ title: `Leave ${String((p.new as Record<string, unknown>).status)}`, body: pick(p.new, "leave_date", "created_at"), tab: "home" });
+  });
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "feedback" }, (p) => {
+    if (!ctx.isAdmin || mine(p.new, "user_id")) return;
+    onEvent({ title: "New feedback", body: pick(p.new, "title"), tab: "fifth" });
+  });
+  channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (p) => {
+    if (!forMe(p.new, "user_id")) return;
+    onEvent({ title: pick(p.new, "title") || "Notification", body: pick(p.new, "body"), tab: "home" });
+  });
+  channel.subscribe();
+  return () => { void client.removeChannel(channel); };
+}
+
 export async function completePiketRemote(taskId: string, date: string, proof?: string): Promise<void> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");

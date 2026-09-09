@@ -187,16 +187,29 @@ export async function requestPermission(): Promise<boolean> {
   }
 }
 
-/** Show a local notification immediately */
-export function showNotification(title: string, options?: NotificationOptions): void {
-  if (!isSupported() || Notification.permission !== 'granted') return;
-  
+/** Show a local notification immediately (OS-level when possible).
+ * Prefers the service worker so alerts also surface while the tab is
+ * backgrounded; falls back to a foreground Notification. Adds tap-to-open
+ * via the SW notificationclick handler when `url` is provided. */
+export function showNotification(title: string, options?: NotificationOptions & { url?: string }): void {
+  if (!isSupported() || Notification.permission !== "granted") return;
+  const { url, ...rest } = options ?? {};
+  const payload: NotificationOptions & { data?: { url?: string } } = {
+    badge: "/icons/icon-192.png",
+    icon: "/icons/icon-192.png",
+    ...rest,
+    ...(url ? { data: { url } } : {}),
+  };
   try {
-    new Notification(title, {
-      badge: '/icons/icon-192.png',
-      icon: '/icons/icon-192.png',
-      ...options,
-    });
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      void navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, payload).catch(() => {
+          try { new Notification(title, payload); } catch { /* blocked */ }
+        });
+      });
+      return;
+    }
+    new Notification(title, payload);
   } catch {
     // Silent fail - notification blocked or error
   }
