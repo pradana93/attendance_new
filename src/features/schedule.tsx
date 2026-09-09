@@ -679,6 +679,7 @@ function Redeem({ user }: { user: User }) {
   const db = getDB();
   const t = useT();
   const [target, setTarget] = useState<string | null>(null);
+  const [redeeming, setRedeeming] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editingItem, setEditingItem] = useState<{ id: string; name: string; cost: number; stock: number; cat: RedeemItem["cat"] } | null>(null);
   const [nName, setNName] = useState(""); const [nCost, setNCost] = useState(100); const [nStock, setNStock] = useState(10);
@@ -689,13 +690,15 @@ function Redeem({ user }: { user: User }) {
   const history = db.redemptions.filter((r) => r.userId === user.id);
 
   const doRedeem = async () => {
-    if (!target) return;
+    if (!target || redeeming) return;
+    setRedeeming(true);
     try {
       await redeemRewardRemote(target);
       await refreshProductionData();
       toast(`${t("p.redeem")} — ${t("p.collect")}`, "ok");
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#ffb224", "#3ed598", "#5ac8e8"], disableForReducedMotion: true });
     } catch (error) { toast(error instanceof Error ? error.message : "Could not redeem reward", "err"); }
+    finally { setRedeeming(false); }
     setTarget(null);
   };
 
@@ -778,7 +781,7 @@ function Redeem({ user }: { user: User }) {
               <span>{t("p.balanceAfter")}</span>
               <span className="text-ink">{Math.max(0, user.points - item.cost)} {t("c.pts")}</span>
             </div>
-            <Btn className="w-full" disabled={user.points < item.cost} onClick={doRedeem}>
+            <Btn className="w-full" busy={redeeming} disabled={user.points < item.cost} onClick={doRedeem}>
               <Ticket size={15} /> {t("p.redeemFor", { n: item.cost })}
             </Btn>
           </div>

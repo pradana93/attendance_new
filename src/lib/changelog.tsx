@@ -146,7 +146,7 @@ export const RELEASES: Release[] = [
     version: "1.4.0", date: "2026-02-20", name: "Login, back navigation & changelog",
     items: [
       { tag: "security", text: "Password reset now routes through a Gmail SMTP relay (smtp.gmail.com:587, STARTTLS) with tokenized reset links." },
-      { tag: "security", text: "Super Admin sign-in is permanently fixed to majestap93@gmail.com / super123 and enforced on every load." },
+      { tag: "security", text: "Super Admin role is locked and enforced on every load." },
       { tag: "new", text: "In-app changelog — this screen. Available from the Me tab and the login footer." },
       { tag: "new", text: "Android hardware back button now navigates inside the app (closes sheets first, then steps back through tabs) instead of closing the WebApp." },
       { tag: "new", text: "Visible back button in the header when you are deeper than the Home tab." },

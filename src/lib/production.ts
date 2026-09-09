@@ -281,12 +281,13 @@ export async function loadWorkspaceData(): Promise<Partial<DB>> {
   ]);
   const firstError = [profiles, attendance, overtime, leaves, announcements, feedback, tasks, assignments, logs, points, items, redemptions, notifications, swaps, overrides].find((result) => result.error)?.error;
   if (firstError) throw new Error(firstError.message);
+  const nameById = new Map((profiles.data ?? []).map((p) => [String((p as ProfileRow).id), String((p as ProfileRow).full_name ?? "")]));
   return {
     users: (profiles.data ?? []).map((row) => mapProfile(row as ProfileRow)),
     attendance: (attendance.data ?? []).map((row) => mapAttendance(row as AttendanceRow)),
     ot: (overtime.data ?? []).map(mapOvertime),
     leaves: (leaves.data ?? []).map(mapLeave),
-    announcements: (announcements.data ?? []).map(mapAnnouncement),
+    announcements: (announcements.data ?? []).map((row) => mapAnnouncement(row, nameById)),
     feedback: (feedback.data ?? []).map(mapFeedback),
     tasks: (tasks.data ?? []).map(mapTask),
     template: (assignments.data ?? []).map(mapAssignment),
@@ -699,8 +700,9 @@ function mapLeave(row: Record<string, unknown>): Leave {
   return { id: String(row.id), userId: String(row.user_id), date: String(row.leave_date), reason: String(row.reason), status: row.status as Leave["status"], createdAt: String(row.created_at) };
 }
 
-function mapAnnouncement(row: Record<string, unknown>): Announcement {
-  return { id: String(row.id), title: String(row.title), body: String(row.body), author: String(row.author_id), date: String(row.published_date ?? row.created_at), pinned: Boolean(row.pinned) };
+function mapAnnouncement(row: Record<string, unknown>, nameById?: Map<string, string>): Announcement {
+  const authorId = String(row.author_id);
+  return { id: String(row.id), title: String(row.title), body: String(row.body), author: nameById?.get(authorId) || authorId, date: String(row.published_date ?? row.created_at).slice(0, 10), pinned: Boolean(row.pinned) };
 }
 
 function mapFeedback(row: Record<string, unknown>): Feedback {

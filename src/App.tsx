@@ -60,22 +60,26 @@ export default function App() {
     let cancelled = false;
 
     const hydrateFromCloud = async () => {
-      const recovered = await consumeRecoveryLink();
-      if (cancelled) return;
-      if (recovered) {
-        setRecovery(true);
-        setAuthChecking(false);
-        return;
+      try {
+        const recovered = await consumeRecoveryLink();
+        if (cancelled) return;
+        if (recovered) {
+          setRecovery(true);
+          return;
+        }
+        const next = await currentProductionUser();
+        if (cancelled) return;
+        if (next) {
+          const remoteSettings = await workspaceSettings();
+          if (remoteSettings && !cancelled) updateSettings(remoteSettings);
+          if (!cancelled) await refreshProductionData();
+        }
+        if (!cancelled) setCur(next);
+      } catch {
+        if (!cancelled) setCur(null);
+      } finally {
+        if (!cancelled) setAuthChecking(false);
       }
-      const next = await currentProductionUser();
-      if (cancelled) return;
-      if (next) {
-        const remoteSettings = await workspaceSettings();
-        if (remoteSettings && !cancelled) updateSettings(remoteSettings);
-        if (!cancelled) await refreshProductionData();
-      }
-      if (!cancelled) setCur(next);
-      if (!cancelled) setAuthChecking(false);
     };
 
     void hydrateFromCloud();

@@ -98,7 +98,7 @@ export default function Overtime({ user }: { user: User }) {
         {isAdmin && scope === "all" && (
           <div className="relative ml-auto">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
-            <input className="inp !w-32 !py-1.5 pl-7 text-[12px]" placeholder={t("o.filterStaff")} value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="inp !w-32 !py-1.5 pl-7 text-[12px]" placeholder={t("o.filterStaff")} aria-label={t("o.filterStaff")} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
         )}
         {isAdmin && <button onClick={exportCsv} className="tap ml-auto flex items-center gap-1.5 rounded-lg border border-line bg-panel2 px-2.5 py-1.5 font-mono text-[11px] text-mut hover:text-ink"><Download size={12} /> {t("o.export")}</button>}

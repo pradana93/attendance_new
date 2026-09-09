@@ -302,6 +302,12 @@ export function Confirm({ open, onClose, onYes, title, body, yesLabel = "Confirm
 }) {
   useBackHandler(open, onClose);
   useScrollLock(open);
+  useEffect(() => {
+    if (!open) return;
+    const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [open, onClose]);
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-5">

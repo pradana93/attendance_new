@@ -57,8 +57,7 @@ const seedTasks = (): PiketTask[] => [
   { id: "t-suhu40", name: "Foto Suhu Container 40ft", area: "Gudang", points: 20, requiresProof: true, active: true, icon: "thermo", desc: "Photograph the thermometer reading of the 40ft container" },
 ];
 
-function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: Department, hue: number, password = "shift123", faceEnrolled = true): User {
-  void password;
+function mkUser(id: string, name: string, email: string, role: Role, employeeId: string, department: Department, hue: number, faceEnrolled = true): User {
   return { id, name, email, role, employeeId, department, avatarHue: hue, faceEnrolled, points: 0, active: true, createdAt: "2025-06-02", notifApproval: true };
 }
 
@@ -91,8 +90,8 @@ function seed(): DB {
     mkUser("u-6", "Siti Rahma", "siti@company.com", "staff", "WMS-006", "Packing", 42),
     mkUser("u-7", "Andi Saputra", "andi@company.com", "staff", "WMS-007", "Leader", 192),
     mkUser("u-8", "Maya Putri", "maya@company.com", "staff", "WMS-008", "Helper", 302),
-    mkUser("u-9", "Fajar Hidayat", "fajar@company.com", "staff", "WMS-009", "Helper", 122, "shift123", false),
-    mkUser("u-10", "Lina Marlina", "lina@company.com", "staff", "WMS-010", "Checker Outbound", 2, "shift123", false),
+    mkUser("u-9", "Fajar Hidayat", "fajar@company.com", "staff", "WMS-009", "Helper", 122, false),
+    mkUser("u-10", "Lina Marlina", "lina@company.com", "staff", "WMS-010", "Checker Outbound", 2, false),
   ];
   users[8].active = false;
 
@@ -295,7 +294,7 @@ export function rerunSetup() {
 
 export function completeSetup(args: { appName: string; company: string; logo?: string; hue: number; siteName: string; lat: number; lng: number; radius: number; adminName: string; adminEmail: string; adminPassword: string }) {
   initStore();
-  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Manager", args.hue, args.adminPassword);
+  const admin: User = mkUser("u-admin", args.adminName, args.adminEmail, "superadmin", "WMS-001", "Manager", args.hue);
   cache = {
     ...emptyDB(),
     settings: { ...defaultSettings, appName: args.appName || "ShiftGate", company: args.company || "-", logo: args.logo, hue: args.hue, siteName: args.siteName || "WH-01", lat: args.lat, lng: args.lng, radius: args.radius },
@@ -722,7 +721,7 @@ export function deleteFeedback(id: string) {
 export function addStaff(input: { name: string; email: string; employeeId: string; role: Role; department: Department; password: string }): { ok: boolean; msg: string } {
   if (!cache) return { ok: false, msg: "Store not ready" };
   if (cache.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) return { ok: false, msg: "Email already registered." };
-  cache.users.push(mkUser(uid(), input.name, input.email, input.role, input.employeeId, input.department, Math.floor(Math.random() * 360), input.password, false));
+  cache.users.push(mkUser(uid(), input.name, input.email, input.role, input.employeeId, input.department, Math.floor(Math.random() * 360), false));
   pushNotif("*", "New team member", `${input.name} joined ${input.department}.`);
   mutate();
   return { ok: true, msg: `${input.name} created · temp password ${input.password}` };

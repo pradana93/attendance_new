@@ -893,6 +893,7 @@ function SearchBar({ isAdmin, goTab, onBell, onAdminSec, onNotice }: {
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder={t("sr.placeholder")}
+          aria-label={t("sr.placeholder")}
           className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-faint"
         />
         {q && (

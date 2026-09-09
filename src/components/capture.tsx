@@ -122,6 +122,12 @@ export function CaptureSheet({ open, onClose, onSave, title, required }: {
 export function Lightbox({ src, onClose, caption }: { src: string | null; onClose: () => void; caption?: string }) {
   useBackHandler(!!src, onClose);
   useScrollLock(!!src);
+  useEffect(() => {
+    if (!src) return;
+    const fn = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [src, onClose]);
   if (!src) return null;
   return createPortal(
     <div className="fixed inset-0 z-[85] flex flex-col bg-black/92 backdrop-blur-sm">
