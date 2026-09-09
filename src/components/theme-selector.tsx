@@ -1,10 +1,10 @@
-import { Moon, Sun, Zap, Coffee } from "lucide-react";
+import { Moon, Sun, Zap, Coffee, Layers } from "lucide-react";
 import type { Settings } from "../types";
 import { updateSettings } from "../lib/store";
 import { Sheet, Btn } from "./ui";
 
 export interface ThemeOption {
-  id: "dark" | "light" | "contrast" | "amber";
+  id: "dark" | "light" | "contrast" | "amber" | "minimalist";
   name: string;
   description: string;
   icon: React.ReactNode;
@@ -34,6 +34,12 @@ const THEMES: ThemeOption[] = [
     name: "Amber",
     description: "Warm monochrome for reading comfort",
     icon: <Coffee size={18} />,
+  },
+  {
+    id: "minimalist",
+    name: "Minimalist",
+    description: "Clean white, thin lines, no hazard — maximal clarity",
+    icon: <Layers size={18} />,
   },
 ];
 

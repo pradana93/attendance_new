@@ -273,7 +273,7 @@ export function initStore() {
   if (typeof document !== "undefined") {
     try {
       const saved = localStorage.getItem("shiftgate-theme") as Settings["theme"] | null;
-      if (saved && ["dark","light","contrast","amber"].includes(saved)) cache.settings.theme = saved;
+      if (saved && ["dark","light","contrast","amber","minimalist"].includes(saved)) cache.settings.theme = saved;
     } catch {}
     document.documentElement.setAttribute("data-theme", cache.settings.theme);
   }

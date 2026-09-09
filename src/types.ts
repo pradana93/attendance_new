@@ -158,7 +158,7 @@ export interface Settings {
   lng: number;
   radius: number;
   lateTime: string; // HH:mm
-  theme: "light" | "dark" | "contrast" | "amber";
+  theme: "light" | "dark" | "contrast" | "amber" | "minimalist";
   pointsExpiryMonths: number;
   otRate: number; // IDR per hour
   language: Lang;
