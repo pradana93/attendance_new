@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Boxes, CheckCircle2, History, LogIn, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Boxes, CheckCircle2, History, LogIn, Eye, EyeOff, Mail, KeyRound } from "lucide-react";
 import { getDB } from "../lib/store";
-import { signIn } from "../lib/production";
-import { Btn, Field, toast } from "../components/ui";
+import { signIn, productionClient } from "../lib/production";
+import { Btn, Field, Sheet, toast } from "../components/ui";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
 import type { User } from "../types";
@@ -16,6 +16,9 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -88,8 +91,30 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
         <Btn className="w-full py-3 text-[15px]" busy={busy}>
           <LogIn size={16} /> Sign in <ArrowRight size={15} />
         </Btn>
+        <button type="button" onClick={() => { setForgotEmail(email); setForgotOpen(true); }} className="tap w-full text-center font-mono text-[11px] text-amber hover:underline">Forgot Password? (Gmail)</button>
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-faint">Supabase Auth · role-based access</p>
       </form>
+
+      <Sheet open={forgotOpen} onClose={() => setForgotOpen(false)} title="Forgot Password — Gmail">
+        <div className="space-y-3">
+          <p className="font-mono text-[11px] text-faint">Enter your email — Gmail SMTP (Super Admin configured) will send a reset link.</p>
+          <Field label="Email"><input className="inp" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@company.com" /></Field>
+          <Btn className="w-full" busy={forgotBusy} onClick={async () => {
+            if (!forgotEmail.includes("@")) { toast("Valid email required", "err"); return; }
+            setForgotBusy(true);
+            try {
+              const client = productionClient();
+              if (!client) throw new Error("Supabase not configured");
+              const { error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim() } });
+              if (error) throw new Error(error.message);
+              toast("Reset email sent via Gmail — check inbox", "ok");
+              setForgotOpen(false);
+            } catch (e) { toast(e instanceof Error ? e.message : "Could not send reset email — ask Super Admin to configure SMTP", "err"); }
+            finally { setForgotBusy(false); }
+          }}><Mail size={14} /> Send reset link</Btn>
+          <p className="text-center font-mono text-[10px] text-faint">Link valid 1 hour · 22:00 lives will still get night Piket</p>
+        </div>
+      </Sheet>
 
       <button onClick={onChangelog}
         className="tap mx-auto mt-6 inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-widest text-faint hover:text-amber">

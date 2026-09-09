@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
-  Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
+  Download, Globe, Image as ImageIcon, KeyRound, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
   Radio, RefreshCw, ScanFace, Send, Settings2, Sun, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import type { Department, Lang, Role, User } from "../types";
@@ -339,6 +339,7 @@ function StaffPanel({ admin }: { admin: User }) {
   const [pw, setPw] = useState(genPw());
   const [saving, setSaving] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [resetUser, setResetUser] = useState<User | null>(null);
   const [profiles, setProfiles] = useState<User[]>([admin]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   useEffect(() => {
@@ -399,6 +400,11 @@ function StaffPanel({ admin }: { admin: User }) {
               <button onClick={() => setEditUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-amber/50 hover:text-amber" aria-label={t("a.editUser")}>
                 <Pencil size={13} />
               </button>
+              {admin.role === "superadmin" && u.role !== "superadmin" && (
+                <button onClick={() => setResetUser(u)} className="tap rounded-lg border border-line bg-panel2 p-2 text-mut hover:border-amber/50 hover:text-amber" aria-label="Reset password" title="Reset password">
+                  <KeyRound size={13} />
+                </button>
+              )}
               {u.id !== admin.id && u.role !== "superadmin" && <Toggle on={u.active} onChange={async () => { try { await setProfileActiveRemote(u.id, !u.active); await refreshProductionData(); setProfiles(await workspaceProfiles()); toast(`${u.name} ${u.active ? "deactivated" : "reactivated"}`, "info"); } catch (error) { toast(error instanceof Error ? error.message : "Could not update account", "err"); } }} />}
             </div>
           </div>
@@ -436,7 +442,37 @@ function StaffPanel({ admin }: { admin: User }) {
       </Sheet>
 
       <EditUserSheet user={editUser} onClose={() => setEditUser(null)} onSaved={async () => setProfiles(await workspaceProfiles())} />
+      <ResetPasswordSheet user={resetUser} onClose={() => setResetUser(null)} />
     </div>
+  );
+}
+
+function ResetPasswordSheet({ user, onClose }: { user: User | null; onClose: () => void }) {
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (user) setPw(""); }, [user]);
+  if (!user) return null;
+  return (
+    <Sheet open={!!user} onClose={onClose} title={`Reset password — ${user.name}`}>
+      <div className="space-y-3.5">
+        <p className="font-mono text-[11px] text-faint">Super Admin only — Gmail SMTP will send new temp password if configured.</p>
+        <Field label="New temporary password"><input className="inp font-mono" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Min 8 chars" /></Field>
+        <Btn className="w-full" busy={busy} onClick={async () => {
+          if (pw.length < 8) { toast("Min 8 characters", "err"); return; }
+          setBusy(true);
+          try {
+            const { productionClient } = await import("../lib/production");
+            const client = productionClient();
+            if (!client) throw new Error("Supabase not configured");
+            const { error } = await client.functions.invoke("reset-password", { body: { userId: user.id, newPassword: pw } });
+            if (error) throw new Error(error.message);
+            toast(`Password reset for ${user.name}`, "ok");
+            onClose();
+          } catch (e) { toast(e instanceof Error ? e.message : "Reset failed", "err"); }
+          finally { setBusy(false); }
+        }}><KeyRound size={14} /> Reset via Gmail</Btn>
+      </div>
+    </Sheet>
   );
 }
 
