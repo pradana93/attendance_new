@@ -63,6 +63,7 @@ function Roster({ user }: { user: User }) {
   const [adminView, setAdminView] = useState<"week" | "template">("week");
   const [selDay, setSelDay] = useState(() => { const g = new Date().getDay(); return g === 0 ? 6 : g; }); // Mon=1…Sat=6, Sunday → Saturday
   const [weekView, setWeekView] = useState<"day" | "matrix">("day");
+  const [matrixFull, setMatrixFull] = useState(false);
   const [editing, setEditing] = useState<PiketTask | "new" | null>(null);
   const [assignFor, setAssignFor] = useState<{ taskId: string; taskName: string } | null>(null);
   const [delTask, setDelTask] = useState<PiketTask | null>(null);
@@ -122,7 +123,8 @@ function Roster({ user }: { user: User }) {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setMatrixFull(true)} className="tap flex items-center gap-1.5 rounded-lg border border-amber/40 bg-amber/10 px-2.5 py-1.5 font-mono text-[11px] uppercase text-amber">⛶ Full Matrix</button>
             <Seg small options={[{ id: "cards", label: "Cards" }, { id: "table", label: "Table" }]} value={myView} onChange={setMyView} />
           </div>
           {myView === "table" ? (
@@ -218,7 +220,10 @@ function Roster({ user }: { user: User }) {
           <SwapQueue admin={user} />
           <div className="flex items-center justify-between">
             <p className="ttl text-[11px] font-bold uppercase tracking-wider text-faint">Week</p>
-            <Seg small options={[{ id: "day", label: "Day" }, { id: "matrix", label: "Matrix" }]} value={weekView} onChange={setWeekView} />
+            <div className="flex items-center gap-2">
+              {weekView === "matrix" && <button onClick={() => setMatrixFull(true)} className="tap rounded-lg border border-amber/40 bg-amber/10 px-2 py-1 font-mono text-[10px] uppercase text-amber">⛶ Full</button>}
+              <Seg small options={[{ id: "day", label: "Day" }, { id: "matrix", label: "Matrix" }]} value={weekView} onChange={setWeekView} />
+            </div>
           </div>
           {weekView === "matrix" ? (
             <div className="card overflow-hidden">
@@ -347,6 +352,49 @@ function Roster({ user }: { user: User }) {
             ))}
           </div>
         </>
+      )}
+
+      {matrixFull && (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-bg">
+          <div className="flex items-center justify-between border-b border-line bg-panel px-3 py-2">
+            <p className="ttl text-[13px] font-bold text-ink">Piket Matrix — Full <span className="font-mono text-[10px] text-faint">transparency</span></p>
+            <button onClick={() => setMatrixFull(false)} className="tap rounded-lg border border-line bg-panel2 px-3 py-1.5 font-mono text-[11px] text-ink">✕ Close</button>
+          </div>
+          <div className="flex-1 overflow-auto p-2">
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-left">
+                  <thead className="bg-panel2">
+                    <tr className="font-mono text-[11px] uppercase tracking-widest text-faint">
+                      <th className="sticky left-0 z-10 bg-panel2 px-4 py-3">Task</th>
+                      {dayLabels.map((d, i) => <th key={d} className="px-3 py-3 text-center">{d}<br /><span className="font-mono text-[10px] text-faint">{fmtDate(dateForDay(i + 1))}</span></th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line2">
+                    {db.tasks.filter((x) => x.active).map((task) => (
+                      <tr key={task.id} className="hover:bg-panel2/20">
+                        <td className="sticky left-0 bg-panel px-4 py-2.5"><span className="flex items-center gap-2 text-[13px] font-semibold text-ink"><span className="text-amber"><TaskGlyph icon={task.icon} size={14} /></span> {task.name} <span className="font-mono text-[10px] text-faint">{task.area} · +{task.points}</span></span></td>
+                        {[1,2,3,4,5,6].map((d) => {
+                          const a = db.template.find((x) => x.taskId === task.id && x.day === d);
+                          const u = a ? db.users.find((x) => x.id === a.userId) : undefined;
+                          const isMe = u?.id === user.id;
+                          const k = dateForDay(d);
+                          const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
+                          return (
+                            <td key={d} className={`px-2 py-2 text-center ${isMe ? "bg-amber/10" : ""}`}>
+                              {u ? <button onClick={() => isAdmin && setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap mx-auto flex flex-col items-center gap-1 ${!isAdmin ? "cursor-default" : ""}`}><Avatar user={u} size={32} /><span className="max-w-[80px] truncate font-mono text-[11px] font-medium text-ink">{u.name.split(" ")[0]}</span><span className="font-mono text-[9px] text-faint">{u.employeeId}</span>{log && <span className="h-1.5 w-1.5 rounded-full bg-ok" />}</button> : <span className="font-mono text-[10px] text-faint">—</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p className="p-2 text-center font-mono text-[10px] text-faint">Ruang gerak full • tap {isAdmin ? "to reassign" : "to view"} • amber = you</p>
+          </div>
+        </div>
       )}
 
       <AssignSheet assignFor={assignFor} onClose={() => setAssignFor(null)} day={selDay} staff={staff} current={db} />
