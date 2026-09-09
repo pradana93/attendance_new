@@ -13,7 +13,7 @@ import {
 import { downloadCSV, fmtDate, fmtIDRFull, fmtTime, relTime, todayKey, wait } from "../lib/util";
 import { useT } from "../lib/i18n";
 import { getShiftWindow, getShiftStatusTone } from "../lib/shifts";
-import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
+import { Avatar, Btn, Chip, Confirm, Empty, Field, LiveDot, PwField, SectionTitle, Seg, Sheet, Toggle, toast } from "../components/ui";
 import { Lightbox } from "../components/capture";
 import { FeedbackInbox } from "./feedback";
 import { GeofenceStudio } from "./geofence";
@@ -433,7 +433,7 @@ function StaffPanel({ admin }: { admin: User }) {
           </Field>
           <Field label={t("a.tempPw")}>
             <div className="flex gap-2">
-              <input className="inp font-mono" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+              <PwField className="flex-1" mono value={pw} onChange={setPw} />
               <Btn variant="ghost" onClick={() => setPw(genPw())}><RefreshCw size={14} /></Btn>
             </div>
           </Field>

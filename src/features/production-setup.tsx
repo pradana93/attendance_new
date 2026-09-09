@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight, BookOpen, CheckCircle2, Cloud, ExternalLink, KeyRound, Link2, RefreshCw, UserPlus } from "lucide-react";
 import { testSupabaseConnection } from "../lib/supabase";
 import { configureProduction, createWorkspaceAdmin, productionClient } from "../lib/production";
-import { Btn, Field, toast } from "../components/ui";
+import { Btn, Field, PwField, toast } from "../components/ui";
 
 export default function ProductionSetup({ onReady }: { onReady: () => void }) {
   const [url, setUrl] = useState(import.meta.env.VITE_SUPABASE_URL ?? "");
@@ -75,7 +75,7 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
         </p>}
         <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-faint"><Link2 size={13} className="text-cool" /> 01 · project connection</div>
         <Field label="Project URL"><input className="inp font-mono" value={url} onChange={(e) => { setUrl(e.target.value); setSchemaReady(false); }} placeholder="https://your-project.supabase.co" /></Field>
-        <Field label="Public anon key"><input className="inp font-mono" type="password" value={key} onChange={(e) => { setKey(e.target.value); setSchemaReady(false); }} placeholder="eyJhbGciOiJIUzI1NiIs…" /></Field>
+        <Field label="Public anon key"><PwField mono value={key} onChange={(v) => { setKey(v); setSchemaReady(false); }} placeholder="eyJhbGciOiJIUzI1NiIs…" autoComplete="off" /></Field>
         {error && <p className="rounded-lg border border-amber/30 bg-amber/8 px-3 py-2 text-[12px] leading-relaxed text-mut">{error}</p>}
         <Btn variant="ghost" className="w-full" busy={testing} disabled={!url || !key} onClick={test}><RefreshCw size={15} /> Test project and schema</Btn>
         {schemaReady && <div className="space-y-3 border-t border-line2 pt-4">
@@ -84,7 +84,7 @@ export default function ProductionSetup({ onReady }: { onReady: () => void }) {
           <div className="grid grid-cols-2 gap-3"><Field label="Company"><input className="inp" value={company} onChange={(e) => setCompany(e.target.value)} /></Field><Field label="Site"><input className="inp" value={siteName} onChange={(e) => setSiteName(e.target.value)} /></Field></div>
           <Field label="Administrator name"><input className="inp" value={adminName} onChange={(e) => setAdminName(e.target.value)} /></Field>
           <Field label="Administrator email"><input className="inp" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3"><Field label="Password"><input className="inp" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} /></Field><Field label="Confirm"><input className="inp" type="password" value={adminPassword2} onChange={(e) => setAdminPassword2(e.target.value)} /></Field></div>
+          <div className="grid grid-cols-2 gap-3"><Field label="Password"><PwField value={adminPassword} onChange={setAdminPassword} /></Field><Field label="Confirm"><PwField value={adminPassword2} onChange={setAdminPassword2} /></Field></div>
           <Btn className="w-full" busy={creating} onClick={createAdmin}><UserPlus size={15} /> Create workspace and sign in</Btn>
         </div>}
         {!schemaReady && <Btn className="w-full" disabled onClick={continueToLogin}><ArrowRight size={15} /> Test schema to continue</Btn>}

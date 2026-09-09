@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Boxes, ChevronLeft, ChevronRight, Database, Fingerprint, Loader2, MapPin, ShieldCheck, Upload } from "lucide-react";
 import { completeSetup, hasWorkspace } from "../lib/store";
-import { Btn, Field, toast } from "../components/ui";
+import { Btn, Field, PwField, toast } from "../components/ui";
 import { locateWithFallback, wait } from "../lib/util";
 
 const STEPS = ["Workspace", "Site & geofence", "Admin account", "Initialize"];
@@ -199,8 +199,8 @@ export default function SetupWizard() {
             <Field label="Full name"><input className="inp" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Ratna Maharani" /></Field>
             <Field label="Email"><input className="inp" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@company.com" /></Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Password"><input className="inp" type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} placeholder="min. 6 chars" /></Field>
-              <Field label="Confirm"><input className="inp" type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} /></Field>
+              <Field label="Password"><PwField value={adminPw} onChange={setAdminPw} placeholder="min. 6 chars" /></Field>
+              <Field label="Confirm"><PwField value={adminPw2} onChange={setAdminPw2} /></Field>
             </div>
             {err && <p className="a-shake rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-[12.5px] text-bad">{err}</p>}
             <div className="card2 flex items-center gap-2.5 px-3.5 py-3">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Info, X, XCircle } from "lucide-react";
 import type { User } from "../types";
 
 /* ---------------- toast bus ---------------- */
@@ -13,10 +13,13 @@ export function toast(text: string, kind: ToastMsg["kind"] = "ok") {
 }
 export function Toaster() {
   const [items, setItems] = useState<ToastMsg[]>([]);
+  const dismiss = (id: number) => setItems((cur) => cur.filter((x) => x.id !== id));
   useEffect(() => {
     const fn = (t: ToastMsg) => {
       setItems((cur) => [...cur.slice(-2), t]);
-      setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== t.id)), 3400);
+      // Errors persist until tapped — server messages are often long and
+      // must remain readable. Success/info still auto-dismiss.
+      if (t.kind !== "err") setTimeout(() => dismiss(t.id), 3400);
     };
     toastSubs.add(fn);
     return () => { toastSubs.delete(fn); };
@@ -26,7 +29,8 @@ export function Toaster() {
   return createPortal(
     <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),12px)] z-[90] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
-        <div key={t.id} className="a-drop pointer-events-auto relative flex w-full max-w-sm items-center gap-2.5 overflow-hidden rounded-xl border border-line bg-panel px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
+        <div key={t.id} onClick={t.kind === "err" ? () => dismiss(t.id) : undefined} title={t.kind === "err" ? "Tap to dismiss" : undefined}
+          className={`a-drop pointer-events-auto relative flex w-full max-w-sm items-center gap-2.5 overflow-hidden rounded-xl border border-line bg-panel px-3.5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] ${t.kind === "err" ? "cursor-pointer" : ""}`}>
           {Icon(t.kind)}
           <p className="text-[13px] font-medium leading-snug text-ink">{t.text}</p>
           <span className="toastbar absolute bottom-0 left-0 h-[2px] rounded-full bg-amber" />
@@ -34,6 +38,33 @@ export function Toaster() {
       ))}
     </div>,
     document.body,
+  );
+}
+
+/* ---------------- password field with show/hide ---------------- */
+export function PwField({ value, onChange, placeholder, mono, className = "", autoComplete = "new-password" }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; className?: string; autoComplete?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        className={`inp w-full pr-10 ${mono ? "font-mono" : ""}`}
+        type={show ? "text" : "password"}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="tap absolute right-3 top-1/2 -translate-y-1/2 p-1 text-faint hover:text-ink"
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
   );
 }
 
