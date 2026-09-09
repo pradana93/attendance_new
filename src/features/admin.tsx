@@ -1286,8 +1286,8 @@ function SmtpPanel() {
       if (!client) throw new Error("Supabase not configured");
       const { data, error } = await client.functions.invoke("send-gmail-test", { body: { to: userName.trim() } });
       if (error) {
-        const msg = (data as any)?.error || error.message || "Edge error";
-        throw new Error(msg);
+        const { edgeErrorMessage } = await import("../lib/supabase");
+        throw new Error(await edgeErrorMessage(error, data));
       }
       toast((data as any)?.message ?? "Test email queued via Gmail", "ok");
     } catch (e) { toast(e instanceof Error ? e.message : "Test failed - check Gmail App Password", "err"); }

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, Boxes, CheckCircle2, History, LogIn, Eye, EyeOff, Mail, KeyRound } from "lucide-react";
 import { getDB } from "../lib/store";
 import { signIn, productionClient } from "../lib/production";
+import { edgeErrorMessage } from "../lib/supabase";
 import { Btn, Field, Sheet, toast } from "../components/ui";
 import { useT } from "../lib/i18n";
 import { VERSION } from "../lib/changelog";
@@ -106,7 +107,7 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
               const client = productionClient();
               if (!client) throw new Error("Supabase not configured");
               const { data, error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim() } });
-              if (error) throw new Error((data as any)?.error || error.message || "Edge error");
+              if (error) throw new Error(await edgeErrorMessage(error, data));
               toast("Reset email sent via Gmail — check inbox", "ok");
               setForgotOpen(false);
             } catch (e) { toast(e instanceof Error ? e.message : "Could not send reset email — ask Super Admin to configure SMTP", "err"); }

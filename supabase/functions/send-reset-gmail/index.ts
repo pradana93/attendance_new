@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
   // Find user by email in profiles
   const { data: profile } = await adminClient.from("profiles").select("workspace_id, email").eq("email", email).maybeSingle();
-  if (!profile) return json({ error: "Email not found" }, 404);
+  if (!profile) return json({ error: "Email not found. Enter the email you use to sign in (your account email)." }, 404);
   const { data: smtp } = await adminClient.from("smtp_settings").select("*").eq("workspace_id", profile.workspace_id).maybeSingle();
   if (!smtp?.host || !smtp?.user_name || !smtp?.pass_encrypted) return json({ error: "Gmail SMTP not configured by Super Admin" }, 400);
 

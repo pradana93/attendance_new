@@ -27,6 +27,30 @@ export function clearSupabase(): void {
   supabaseInstance = null;
 }
 
+/**
+ * Extract the real server message from a functions.invoke() failure.
+ * On non-2xx, supabase-js returns data=null and stashes the response
+ * body in (error as FunctionsHttpError).context (a Response), so reading
+ * only `data` always falls back to the generic "non-2xx" message.
+ */
+export async function edgeErrorMessage(error: unknown, data: unknown): Promise<string> {
+  const d = data as { error?: unknown; message?: unknown } | null | undefined;
+  if (d && typeof d.error === "string" && d.error) return d.error;
+  const ctx = (error as { context?: unknown } | null)?.context;
+  if (ctx && typeof (ctx as Response).json === "function") {
+    try {
+      const body = await (ctx as Response).json() as { error?: unknown; message?: unknown };
+      if (typeof body?.error === "string" && body.error) return body.error;
+      if (typeof body?.message === "string" && body.message) return body.message;
+    } catch { /* fall through to generic message */ }
+  } else if (typeof ctx === "string" && ctx) {
+    return ctx;
+  } else if (ctx && typeof (ctx as { error?: unknown }).error === "string") {
+    return (ctx as { error: string }).error;
+  }
+  return error instanceof Error ? error.message : "Edge error";
+}
+
 export interface SupabaseConnectionResult {
   success: boolean;
   schemaReady: boolean;
