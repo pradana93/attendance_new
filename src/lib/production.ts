@@ -114,6 +114,49 @@ export async function signOut(): Promise<void> {
   await productionClient()?.auth.signOut();
 }
 
+/**
+ * Consume a Supabase recovery link (?code= PKCE or #access_token hash).
+ * detectSessionInUrl is disabled globally, so the recovery redirect must be
+ * exchanged manually. Cleans the URL and returns true when a recovery
+ * session was established and the user must now set a new password.
+ */
+export async function consumeRecoveryLink(): Promise<boolean> {
+  try {
+    const client = productionClient();
+    if (!client || typeof window === "undefined") return false;
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    if (code) {
+      const { error } = await client.auth.exchangeCodeForSession(code);
+      if (error) return false;
+      url.searchParams.delete("code");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      return true;
+    }
+    if (window.location.hash.includes("access_token")) {
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      const access_token = hash.get("access_token");
+      const refresh_token = hash.get("refresh_token");
+      if (!access_token || !refresh_token) return false;
+      const { error } = await client.auth.setSession({ access_token, refresh_token });
+      if (error) return false;
+      window.history.replaceState(null, "", url.pathname + url.search);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export async function updatePassword(newPassword: string): Promise<{ ok: boolean; message: string }> {
+  const client = productionClient();
+  if (!client) return { ok: false, message: "Supabase is not configured for this deployment." };
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, message: "Password updated — you are signed in." };
+}
+
 export async function createStaffAccount(input: {
   name: string;
   email: string;

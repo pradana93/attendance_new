@@ -10,13 +10,14 @@ import { ChangelogSheet } from "./lib/changelog";
 import { ServerStatusSheet } from "./components/server-status";
 import ProductionSetup from "./features/production-setup";
 import Login from "./features/auth";
+import { RecoveryGate } from "./features/auth";
 import Dashboard from "./features/dashboard";
 import Schedule from "./features/schedule";
 import Performance from "./features/performance";
 import Overtime from "./features/overtime";
 import Admin, { type AdminSec } from "./features/admin";
 import Me from "./features/me";
-import { currentProductionUser, hasProductionConfiguration, markNotificationRead, productionClient, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings } from "./lib/production";
+import { currentProductionUser, hasProductionConfiguration, markNotificationRead, productionClient, saveTutorialState, signOut, subscribeWorkspaceChanges, workspaceSettings, consumeRecoveryLink } from "./lib/production";
 import { TutorialOverlay, type TutorialTarget } from "./features/tutorial";
 
 initStore();
@@ -46,6 +47,7 @@ export default function App() {
   const [cloudReady, setCloudReady] = useState(hasProductionConfiguration);
   const [showSetup, setShowSetup] = useState(false);
   const [cur, setCur] = useState<User | null>(null);
+  const [recovery, setRecovery] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setBooting(false), 950);
@@ -58,6 +60,13 @@ export default function App() {
     let cancelled = false;
 
     const hydrateFromCloud = async () => {
+      const recovered = await consumeRecoveryLink();
+      if (cancelled) return;
+      if (recovered) {
+        setRecovery(true);
+        setAuthChecking(false);
+        return;
+      }
       const next = await currentProductionUser();
       if (cancelled) return;
       if (next) {
@@ -112,6 +121,7 @@ export default function App() {
   if (showSetup) return <ProductionSetup onReady={() => { setCloudReady(true); setShowSetup(false); }} />;
   if (!cloudReady) return <ProductionSetup onReady={() => setCloudReady(true)} />;
   if (authChecking) return <Splash />;
+  if (recovery) return <RecoveryGate onDone={() => setRecovery(false)} />;
   if (!cur)
     return (
       <>

@@ -106,7 +106,7 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
             try {
               const client = productionClient();
               if (!client) throw new Error("Supabase not configured");
-              const { data, error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim() } });
+              const { data, error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim(), redirectTo: window.location.origin } });
               if (error) throw new Error(await edgeErrorMessage(error, data));
               toast("Reset email sent via Gmail — check inbox", "ok");
               setForgotOpen(false);
@@ -122,6 +122,47 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
         <History size={12} /> v{VERSION} · changelog
       </button>
 
+      </div>
+    </div>
+  );
+}
+
+/* Set a new password after arriving via a Gmail recovery link */
+export function RecoveryGate({ onDone }: { onDone: () => void }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
+      <div className="m-auto w-full">
+        <div className="card space-y-4 p-5">
+          <h1 className="ttl text-xl font-bold text-ink">Set a new password</h1>
+          <p className="font-mono text-[11px] text-faint">Your reset link is verified — choose a new password (min 8 chars).</p>
+          <Field label="New password">
+            <input className="inp w-full" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" />
+          </Field>
+          <Field label="Confirm password">
+            <input className="inp w-full" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="••••••••" />
+          </Field>
+          <Btn className="w-full" busy={busy} onClick={async () => {
+            if (pw.length < 8) { toast("Password must be at least 8 characters", "err"); return; }
+            if (pw !== pw2) { toast("Passwords do not match", "err"); return; }
+            setBusy(true);
+            try {
+              const { updatePassword } = await import("../lib/production");
+              const res = await updatePassword(pw);
+              if (!res.ok) throw new Error(res.message);
+              toast(res.message, "ok");
+              onDone();
+            } catch (e) { toast(e instanceof Error ? e.message : "Could not update password", "err"); }
+            finally { setBusy(false); }
+          }}><KeyRound size={14} /> Update password</Btn>
+          <button type="button" onClick={async () => {
+            const { signOut } = await import("../lib/production");
+            await signOut();
+            onDone();
+          }} className="tap w-full text-center font-mono text-[11px] text-faint hover:text-ink">Back to login</button>
+        </div>
       </div>
     </div>
   );

@@ -18,8 +18,11 @@ Deno.serve(async (req) => {
   const { data: smtp } = await adminClient.from("smtp_settings").select("*").eq("workspace_id", profile.workspace_id).maybeSingle();
   if (!smtp?.host || !smtp?.user_name || !smtp?.pass_encrypted) return json({ error: "Gmail SMTP not configured by Super Admin" }, 400);
 
-  // Generate reset link via Supabase Auth (generates only, does not send email itself)
-  const { data: linkData, error: resetError } = await adminClient.auth.admin.generateLink({ type: "recovery", email });
+  // Generate reset link via Supabase Auth (generates only, does not send email itself).
+  // redirectTo must be allowlisted in Dashboard → Authentication → URL Configuration.
+  const redirectRaw = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
+  const redirectTo = /^https?:\/\/[^/]+/.test(redirectRaw) ? redirectRaw : undefined;
+  const { data: linkData, error: resetError } = await adminClient.auth.admin.generateLink({ type: "recovery", email, options: redirectTo ? { redirectTo } : undefined });
   if (resetError) return json({ error: resetError.message }, 400);
   const actionLink = (linkData as { properties?: { action_link?: string } } | null)?.properties?.action_link;
   if (!actionLink) return json({ error: "Could not generate reset link" }, 500);
