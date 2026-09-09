@@ -105,8 +105,8 @@ export default function Login({ onLogin, onChangelog }: { onLogin: (u: User) => 
             try {
               const client = productionClient();
               if (!client) throw new Error("Supabase not configured");
-              const { error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim() } });
-              if (error) throw new Error(error.message);
+              const { data, error } = await client.functions.invoke("send-reset-gmail", { body: { email: forgotEmail.trim() } });
+              if (error) throw new Error((data as any)?.error || error.message || "Edge error");
               toast("Reset email sent via Gmail — check inbox", "ok");
               setForgotOpen(false);
             } catch (e) { toast(e instanceof Error ? e.message : "Could not send reset email — ask Super Admin to configure SMTP", "err"); }

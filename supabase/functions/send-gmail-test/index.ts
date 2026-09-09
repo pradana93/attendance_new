@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.14";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -15,8 +16,26 @@ Deno.serve(async (req) => {
   if (!profile || profile.role !== "superadmin") return json({ error: "Super Admin only" }, 403);
   const { data: smtp } = await adminClient.from("smtp_settings").select("*").eq("workspace_id", profile.workspace_id).maybeSingle();
   if (!smtp?.host || !smtp?.user_name || !smtp?.pass_encrypted) return json({ error: "SMTP not configured. Save Host/User/App Password first." }, 400);
-  // For minimal, just validate and return ok (actual nodemailer send would use smtp.pass_encrypted)
-  return json({ ok: true, message: `Gmail SMTP ${smtp.host}:${smtp.port} for ${smtp.user_name} is configured. Test would send to ${smtp.user_name}.` });
+  const body = await req.json().catch(() => ({}));
+  const to = (body.to ?? smtp.user_name ?? "").trim();
+  if (!to || !to.includes("@")) return json({ error: "Valid recipient required" }, 400);
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port ?? 587,
+      secure: (smtp.port ?? 587) === 465,
+      auth: { user: smtp.user_name, pass: smtp.pass_encrypted },
+    });
+    const info = await transporter.sendMail({
+      from: smtp.sender || smtp.user_name,
+      to,
+      subject: "ShiftGate Gmail SMTP test",
+      text: `Gmail SMTP is working (${smtp.host}:${smtp.port ?? 587} as ${smtp.user_name}).`,
+    });
+    return json({ ok: true, message: `Test email sent via Gmail to ${to}.`, messageId: info.messageId ?? null });
+  } catch (e) {
+    return json({ error: e instanceof Error ? `Gmail send failed: ${e.message}` : "Gmail send failed" }, 502);
+  }
 });
 
 function json(body: unknown, status = 200): Response {

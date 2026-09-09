@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.14";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -17,13 +18,30 @@ Deno.serve(async (req) => {
   const { data: smtp } = await adminClient.from("smtp_settings").select("*").eq("workspace_id", profile.workspace_id).maybeSingle();
   if (!smtp?.host || !smtp?.user_name || !smtp?.pass_encrypted) return json({ error: "Gmail SMTP not configured by Super Admin" }, 400);
 
-  // Generate reset token via Supabase Auth (still uses Auth but email sent via Gmail)
-  const { error: resetError } = await adminClient.auth.admin.generateLink({ type: "recovery", email });
+  // Generate reset link via Supabase Auth (generates only, does not send email itself)
+  const { data: linkData, error: resetError } = await adminClient.auth.admin.generateLink({ type: "recovery", email });
   if (resetError) return json({ error: resetError.message }, 400);
+  const actionLink = (linkData as { properties?: { action_link?: string } } | null)?.properties?.action_link;
+  if (!actionLink) return json({ error: "Could not generate reset link" }, 500);
 
-  // For minimal, just return ok (actual Gmail send would use nodemailer with smtp settings)
-  // In production, use nodemailer here with smtp.host/port/user/pass to send the link
-  return json({ ok: true, message: `Reset link generated for ${email} via ${smtp.host} (Gmail). Check inbox.` });
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port ?? 587,
+      secure: (smtp.port ?? 587) === 465,
+      auth: { user: smtp.user_name, pass: smtp.pass_encrypted },
+    });
+    await transporter.sendMail({
+      from: smtp.sender || smtp.user_name,
+      to: email,
+      subject: "Reset your ShiftGate password",
+      text: `Reset your password with this link (valid 1 hour): ${actionLink}`,
+      html: `<p>Reset your password with this link (valid 1 hour):</p><p><a href="${actionLink}">Reset password</a></p>`,
+    });
+    return json({ ok: true, message: `Reset link sent via Gmail to ${email}. Check inbox.` });
+  } catch (e) {
+    return json({ error: e instanceof Error ? `Gmail send failed: ${e.message}` : "Gmail send failed" }, 502);
+  }
 });
 
 function json(body: unknown, status = 200): Response {
