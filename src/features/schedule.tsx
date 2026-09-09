@@ -4,7 +4,7 @@ import {
   ArrowLeftRight, Camera, Check, ChevronLeft, ChevronRight, ClipboardList, Coffee, Cookie, Gift,
   Grid3x3, History, Package, Pencil, Plus, RotateCw, Shield, Sparkles, Ticket, Trash2, Wallet, X,
 } from "lucide-react";
-import type { PiketTask, User } from "../types";
+import type { PiketTask, RedeemItem, User } from "../types";
 import {
   addItem, completePiket, decideSwap, deleteTask, getDB, piketForDate, redeem,
   requestSwap, rotateTemplate, saveTask, setAssignment, userName,

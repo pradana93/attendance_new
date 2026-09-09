@@ -23,7 +23,7 @@ export function ServerStatusSheet({ open, onClose, online }: ServerStatusSheetPr
   const client = productionClient();
   const hasConfig = hasProductionConfiguration();
   const supabaseStatus = (online && hasConfig && client) ? "connected" : "off";
-  const supabaseUrl = client?.supabaseUrl ?? db?.settings.supabase.url ?? "";
+  const supabaseUrl = db?.settings.supabase.url ?? import.meta.env.VITE_SUPABASE_URL ?? "";
 
   // Dynamic status details
   const getStatusColor = () => {

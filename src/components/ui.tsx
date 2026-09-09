@@ -39,10 +39,10 @@ export function Toaster() {
 
 /* ---------------- primitives ---------------- */
 export function Btn({
-  children, onClick, variant = "primary", className = "", disabled, busy,
+  children, onClick, variant = "primary", className = "", disabled, busy, title,
 }: {
   children: ReactNode; onClick?: () => void; variant?: "primary" | "ghost" | "danger" | "ok" | "dark";
-  className?: string; disabled?: boolean; busy?: boolean;
+  className?: string; disabled?: boolean; busy?: boolean; title?: string;
 }) {
   const base = "tap inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-semibold disabled:opacity-45 disabled:pointer-events-none";
   const styles = {
@@ -53,7 +53,7 @@ export function Btn({
     dark: "bg-line2 text-ink hover:bg-line",
   }[variant];
   return (
-    <button onClick={onClick} disabled={disabled || busy} className={`${base} ${styles} ${className}`}>
+    <button onClick={onClick} disabled={disabled || busy} title={title} className={`${base} ${styles} ${className}`}>
       {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
       {children}
     </button>

@@ -837,7 +837,7 @@ function ShiftEditorSheet({ user, onClose, onSaved }: { user: User | null; onClo
             <Check size={15} /> {user.shiftStart ? "Update Shift" : "Create Shift"}
           </Btn>
           {user.shiftStart && (
-            <Btn variant="ghost" tone="bad" busy={saving} onClick={handleClear} className="flex-1">
+            <Btn variant="danger" busy={saving} onClick={handleClear} className="flex-1">
               <Trash2 size={14} /> Reset to Default
             </Btn>
           )}
