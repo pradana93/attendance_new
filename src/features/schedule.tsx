@@ -135,10 +135,8 @@ function Roster({ user }: { user: User }) {
                     <tr className="font-mono text-[10px] uppercase tracking-widest text-faint">
                       <th className="px-3 py-2">Day</th>
                       <th className="px-3 py-2">Task</th>
-                      <th className="px-3 py-2">Area</th>
-                      <th className="px-3 py-2 text-center">Pts</th>
-                      <th className="px-3 py-2">Status</th>
-                      <th className="px-3 py-2"></th>
+                      <th className="px-3 py-2 text-center">Status</th>
+                      <th className="px-3 py-2 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line2">
@@ -148,11 +146,9 @@ function Roster({ user }: { user: User }) {
                       return mine.map(({ task, log }) => (
                         <tr key={`${day}-${task.id}`} className={k === todayKey() ? "bg-amber/5" : ""}>
                           <td className="px-3 py-2"><span className={`ttl rounded-md px-2 py-1 text-[11px] font-bold ${k === todayKey() ? "bg-amber text-[#191203]" : "bg-panel2 text-mut"}`}>{dayLabels[day - 1]}</span> <span className="font-mono text-[10px] text-faint">{fmtDate(k)}</span></td>
-                          <td className="px-3 py-2"><span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink"><span className="text-amber"><TaskGlyph icon={task.icon} size={13} /></span> {task.name}</span></td>
-                          <td className="px-3 py-2 font-mono text-[11px] text-faint">{task.area}</td>
-                          <td className="px-3 py-2 text-center font-mono text-[12px] font-semibold text-ink">+{task.points}</td>
-                          <td className="px-3 py-2">{log ? <Chip tone="ok"><Check size={10} /></Chip> : <Chip tone={k <= todayKey() ? "amber" : "mut"}>{k <= todayKey() ? t("p.complete") : "—"}</Chip>}</td>
-                          <td className="px-3 py-2 text-right">{!log && k <= todayKey() ? <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: user.id }) : doComplete(task, k, user.id)} className="tap rounded-lg border border-amber/45 bg-amber/10 px-2 py-1 font-mono text-[10px] uppercase text-amber">{t("p.complete")}</button> : log?.proof ? <button onClick={() => setViewPhoto({ src: log.proof!, caption: `${task.name} · ${fmtDate(k)}` })} className="tap rounded-md border border-line px-1.5 py-1 font-mono text-[10px] text-cool">View</button> : null}</td>
+                          <td className="px-3 py-2"><span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink"><span className="text-amber"><TaskGlyph icon={task.icon} size={13} /></span> {task.name}<span className="font-mono text-[10px] text-faint">· {task.area} · +{task.points}</span></span></td>
+                          <td className="px-3 py-2 text-center">{log ? <Chip tone="ok"><Check size={10} /> Done</Chip> : <Chip tone={k <= todayKey() ? "amber" : "mut"}>{k <= todayKey() ? "Belum" : "—"}</Chip>}</td>
+                          <td className="px-3 py-2 text-right">{!log && k <= todayKey() ? <button onClick={() => task.requiresProof ? setProofFor({ task, date: k, userId: user.id }) : doComplete(task, k, user.id)} className="tap rounded-lg border border-amber/45 bg-amber/10 px-3 py-1.5 font-mono text-[11px] uppercase text-amber">{t("p.complete")}</button> : log?.proof ? <button onClick={() => setViewPhoto({ src: log.proof!, caption: `${task.name} · ${fmtDate(k)}` })} className="tap rounded-md border border-line px-2 py-1 font-mono text-[10px] text-cool">View</button> : <span className="font-mono text-[10px] text-faint">—</span>}</td>
                         </tr>
                       ));
                     })}
@@ -226,36 +222,31 @@ function Roster({ user }: { user: User }) {
             </div>
           </div>
           {weekView === "matrix" ? (
-            <div className="card overflow-hidden">
-              <div className="no-scrollbar overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left">
-                  <thead className="bg-panel2">
-                    <tr className="font-mono text-[10px] uppercase tracking-widest text-faint">
-                      <th className="sticky left-0 z-10 bg-panel2 px-3 py-2">Task</th>
-                      {dayLabels.map((d) => <th key={d} className="px-2 py-2 text-center">{d}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line2">
-                    {db.tasks.filter((x) => x.active).map((task) => (
-                      <tr key={task.id} className="hover:bg-panel2/30">
-                        <td className="sticky left-0 bg-panel px-3 py-1.5"><span className="flex items-center gap-1.5 text-[11px] font-semibold text-ink"><span className="text-amber"><TaskGlyph icon={task.icon} size={12} /></span> {task.name} <span className="font-mono text-[9px] text-faint">{task.area}</span></span></td>
-                        {[1,2,3,4,5,6].map((d) => {
-                          const a = db.template.find((x) => x.taskId === task.id && x.day === d);
-                          const u = a ? db.users.find((x) => x.id === a.userId) : undefined;
-                          const k = dateForDay(d);
-                          const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
-                          return (
-                            <td key={d} className="px-1.5 py-1 text-center">
-                              {u ? <button onClick={() => setAssignFor({ taskId: task.id, taskName: task.name })} className="tap mx-auto flex flex-col items-center gap-0.5"><Avatar user={u} size={22} /><span className="max-w-[64px] truncate font-mono text-[9px] text-ink">{u.name.split(" ")[0]}</span>{log && <span className="h-1 w-1 rounded-full bg-ok" />}</button> : <button onClick={() => setAssignFor({ taskId: task.id, taskName: task.name })} className="tap rounded-md border border-dashed border-amber/40 px-1.5 py-1 font-mono text-[9px] text-amber">+</button>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="px-3 py-1.5 font-mono text-[9px] text-faint">Tap cell to reassign • dot = done</p>
+            <div className="space-y-2">
+              {db.tasks.filter((x) => x.active).map((task) => (
+                <div key={task.id} className="card p-2.5">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <span className="text-amber"><TaskGlyph icon={task.icon} size={12} /></span>
+                    <p className="truncate text-[12px] font-semibold text-ink">{task.name}</p>
+                    <span className="font-mono text-[9px] text-faint">{task.area}</span>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                    {[1,2,3,4,5,6].map((d) => {
+                      const a = db.template.find((x) => x.taskId === task.id && x.day === d);
+                      const u = a ? db.users.find((x) => x.id === a.userId) : undefined;
+                      const k = dateForDay(d);
+                      const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
+                      return (
+                        <button key={d} onClick={() => setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap rounded-lg border px-1.5 py-1.5 text-center ${u ? "border-line bg-panel2" : "border-dashed border-amber/40 bg-amber/5"}`}>
+                          <p className="font-mono text-[9px] uppercase tracking-widest text-faint">{dayLabels[d - 1]}</p>
+                          {u ? <span className="mx-auto mt-0.5 flex flex-col items-center gap-0.5"><Avatar user={u} size={22} /><span className="max-w-[60px] truncate text-[10px] font-medium text-ink">{u.name.split(" ")[0]}</span>{log && <span className="h-1 w-1 rounded-full bg-ok" />}</span> : <span className="mt-1 font-mono text-[10px] text-amber">+</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <p className="px-1 py-1 text-center font-mono text-[9px] text-faint">Tap card to reassign • dot = done • Full for larger view</p>
             </div>
           ) : (
             <>
@@ -357,42 +348,39 @@ function Roster({ user }: { user: User }) {
       {matrixFull && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-bg">
           <div className="flex items-center justify-between border-b border-line bg-panel px-3 py-2">
-            <p className="ttl text-[13px] font-bold text-ink">Piket Matrix — Full <span className="font-mono text-[10px] text-faint">transparency</span></p>
+            <p className="ttl text-[13px] font-bold text-ink">Piket Matrix — Full <span className="font-mono text-[10px] text-faint">transparency • {db.tasks.filter((x) => x.active).length} tasks ×6</span></p>
             <button onClick={() => setMatrixFull(false)} className="tap rounded-lg border border-line bg-panel2 px-3 py-1.5 font-mono text-[11px] text-ink">✕ Close</button>
           </div>
-          <div className="flex-1 overflow-auto p-2">
-            <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left">
-                  <thead className="bg-panel2">
-                    <tr className="font-mono text-[11px] uppercase tracking-widest text-faint">
-                      <th className="sticky left-0 z-10 bg-panel2 px-4 py-3">Task</th>
-                      {dayLabels.map((d, i) => <th key={d} className="px-3 py-3 text-center">{d}<br /><span className="font-mono text-[10px] text-faint">{fmtDate(dateForDay(i + 1))}</span></th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line2">
-                    {db.tasks.filter((x) => x.active).map((task) => (
-                      <tr key={task.id} className="hover:bg-panel2/20">
-                        <td className="sticky left-0 bg-panel px-4 py-2.5"><span className="flex items-center gap-2 text-[13px] font-semibold text-ink"><span className="text-amber"><TaskGlyph icon={task.icon} size={14} /></span> {task.name} <span className="font-mono text-[10px] text-faint">{task.area} · +{task.points}</span></span></td>
-                        {[1,2,3,4,5,6].map((d) => {
-                          const a = db.template.find((x) => x.taskId === task.id && x.day === d);
-                          const u = a ? db.users.find((x) => x.id === a.userId) : undefined;
-                          const isMe = u?.id === user.id;
-                          const k = dateForDay(d);
-                          const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
-                          return (
-                            <td key={d} className={`px-2 py-2 text-center ${isMe ? "bg-amber/10" : ""}`}>
-                              {u ? <button onClick={() => isAdmin && setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap mx-auto flex flex-col items-center gap-1 ${!isAdmin ? "cursor-default" : ""}`}><Avatar user={u} size={32} /><span className="max-w-[80px] truncate font-mono text-[11px] font-medium text-ink">{u.name.split(" ")[0]}</span><span className="font-mono text-[9px] text-faint">{u.employeeId}</span>{log && <span className="h-1.5 w-1.5 rounded-full bg-ok" />}</button> : <span className="font-mono text-[10px] text-faint">—</span>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div className="flex-1 overflow-auto p-3">
+            <div className="space-y-3">
+              {db.tasks.filter((x) => x.active).map((task) => (
+                <div key={task.id} className="card p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber/12 text-amber"><TaskGlyph icon={task.icon} size={14} /></span>
+                    <div>
+                      <p className="text-[13px] font-semibold text-ink">{task.name}</p>
+                      <p className="font-mono text-[10px] text-faint">{task.area} · +{task.points} {task.requiresProof ? "· 📷" : ""}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[1,2,3,4,5,6].map((d) => {
+                      const a = db.template.find((x) => x.taskId === task.id && x.day === d);
+                      const u = a ? db.users.find((x) => x.id === a.userId) : undefined;
+                      const isMe = u?.id === user.id;
+                      const k = dateForDay(d);
+                      const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
+                      return (
+                        <div key={d} className={`rounded-xl border px-2 py-2 text-center ${isMe ? "border-amber/40 bg-amber/10" : "border-line bg-panel2"} ${!u ? "border-dashed" : ""}`}>
+                          <p className="font-mono text-[10px] uppercase tracking-widest text-faint">{dayLabels[d - 1]}</p>
+                          {u ? <button onClick={() => isAdmin && setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap mt-1 flex w-full flex-col items-center gap-0.5 ${!isAdmin ? "cursor-default" : ""}`}><Avatar user={u} size={28} /><span className="max-w-[72px] truncate text-[11px] font-medium text-ink">{u.name.split(" ")[0]}</span>{log && <Chip tone="ok" className="!px-1 !py-0 text-[9px]"><Check size={8} /></Chip>}</button> : <span className="mt-2 font-mono text-[10px] text-faint">—</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="p-2 text-center font-mono text-[10px] text-faint">Ruang gerak full • tap {isAdmin ? "to reassign" : "to view"} • amber = you</p>
+            <p className="p-2 text-center font-mono text-[10px] text-faint">Ruang gerak full • 3-col mobile → 6-col desktop • tap {isAdmin ? "to reassign" : "to view"} • amber = you</p>
           </div>
         </div>
       )}
