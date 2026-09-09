@@ -102,6 +102,11 @@ export default function App() {
     return subscribeWorkspaceChanges(() => { void refreshProductionData(); });
   }, [cur?.id]);
 
+  useEffect(() => {
+    if (!db) return;
+    document.documentElement.setAttribute("data-theme", db.settings.theme);
+  }, [db?.settings.theme]);
+
   if (booting) return <Splash />;
   if (!db) return null;
   if (showSetup) return <ProductionSetup onReady={() => { setCloudReady(true); setShowSetup(false); }} />;
