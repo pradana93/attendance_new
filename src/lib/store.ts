@@ -270,6 +270,13 @@ export const APP_VERSION = "2.3.0";
 export function initStore() {
   if (cache) return;
   cache = emptyDB();
+  if (typeof document !== "undefined") {
+    try {
+      const saved = localStorage.getItem("shiftgate-theme") as Settings["theme"] | null;
+      if (saved && ["dark","light","contrast","amber"].includes(saved)) cache.settings.theme = saved;
+    } catch {}
+    document.documentElement.setAttribute("data-theme", cache.settings.theme);
+  }
 }
 
 export function hasWorkspace() {
@@ -772,6 +779,10 @@ export function enrollFace(userId: string) {
 export function updateSettings(patch: Partial<Settings>) {
   if (!cache) return;
   cache.settings = { ...cache.settings, ...patch };
+  if (patch.theme && typeof document !== "undefined") {
+    document.documentElement.setAttribute("data-theme", patch.theme);
+    try { localStorage.setItem("shiftgate-theme", patch.theme); } catch {}
+  }
   void saveWorkspaceSettings(patch).catch(() => undefined);
   persist(); emit();
 }

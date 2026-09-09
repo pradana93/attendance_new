@@ -3,7 +3,7 @@ import {
   Bell, CalendarOff, Cloud, Database, Globe, History, LogOut, Moon, Plane, Sun, UserCircle2, MessageSquare, AlarmClock, X, Palette,
 } from "lucide-react";
 import type { Lang, User } from "../types";
-import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings } from "../lib/store";
+import { getDB, leaveBalance, requestLeave, setNotifPref, updateSettings, useDB } from "../lib/store";
 import { createLeaveRequest, setNotificationPreferenceRemote, signOut } from "../lib/production";
 import { refreshProductionData } from "../lib/store";
 import { fmtDate, todayKey } from "../lib/util";
@@ -16,7 +16,7 @@ import { FeedbackSheet } from "./feedback";
 import * as notif from "../lib/notifications";
 
 export default function Me({ user, onLogout, onChangelog, onFeedback }: { user: User; onLogout: () => void; onChangelog: () => void; onFeedback?: () => void }) {
-  const db = getDB();
+  const db = useDB() ?? getDB();
   const t = useT();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
