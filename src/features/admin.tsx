@@ -1270,9 +1270,11 @@ function SmtpPanel() {
       const ws = await client.from("profiles").select("workspace_id").eq("id", user!.id).maybeSingle();
       const wid = (ws.data as any)?.workspace_id;
       if (!wid) throw new Error("Workspace not found");
-      const { error } = await client.from("smtp_settings").upsert({ workspace_id: wid, host: host.trim(), port, user_name: userName.trim(), pass_encrypted: pass, sender: sender.trim(), updated_at: new Date().toISOString(), updated_by: user!.id }, { onConflict: "workspace_id" });
+      const cleanPass = pass.replace(/\s/g, "");
+      if (cleanPass.length < 16) throw new Error("App Password must be 16 chars (no spaces)");
+      const { error } = await client.from("smtp_settings").upsert({ workspace_id: wid, host: host.trim(), port, user_name: userName.trim(), pass_encrypted: cleanPass, sender: sender.trim(), updated_at: new Date().toISOString(), updated_by: user!.id }, { onConflict: "workspace_id" });
       if (error) throw new Error(error.message);
-      toast("SMTP saved", "ok");
+      toast("SMTP saved — now Test", "ok");
     } catch (e) { toast(e instanceof Error ? e.message : "Could not save SMTP", "err"); }
     finally { setSaving(false); }
   };
@@ -1282,9 +1284,12 @@ function SmtpPanel() {
       const { productionClient } = await import("../lib/production");
       const client = productionClient();
       if (!client) throw new Error("Supabase not configured");
-      const { error } = await client.functions.invoke("send-gmail-test", { body: { to: userName.trim() } });
-      if (error) throw new Error(error.message);
-      toast("Test email sent to " + userName.trim(), "ok");
+      const { data, error } = await client.functions.invoke("send-gmail-test", { body: { to: userName.trim() } });
+      if (error) {
+        const msg = (data as any)?.error || error.message || "Edge error";
+        throw new Error(msg);
+      }
+      toast((data as any)?.message ?? "Test email queued via Gmail", "ok");
     } catch (e) { toast(e instanceof Error ? e.message : "Test failed - check Gmail App Password", "err"); }
     finally { setTesting(false); }
   };
