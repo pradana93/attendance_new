@@ -348,7 +348,10 @@ function Roster({ user }: { user: User }) {
       {matrixFull && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-bg">
           <div className="flex items-center justify-between border-b border-line bg-panel px-3 py-2">
-            <p className="ttl text-[13px] font-bold text-ink">Piket Matrix — Full <span className="font-mono text-[10px] text-faint">transparency • {db.tasks.filter((x) => x.active).length} tasks ×6</span></p>
+            <div>
+              <p className="ttl text-[13px] font-bold text-ink">Piket Matrix — Full <span className="font-mono text-[10px] text-faint">transparency • {db.tasks.filter((x) => x.active).length} tasks ×6</span></p>
+              <p className="font-mono text-[10px] text-faint">{fmtDate(dateForDay(1))} — {fmtDate(dateForDay(6))} · {fmtDate(dateForDay(1)).slice(0,4)} week</p>
+            </div>
             <button onClick={() => setMatrixFull(false)} className="tap rounded-lg border border-line bg-panel2 px-3 py-1.5 font-mono text-[11px] text-ink">✕ Close</button>
           </div>
           <div className="flex-1 overflow-auto p-3">
@@ -370,9 +373,9 @@ function Roster({ user }: { user: User }) {
                       const k = dateForDay(d);
                       const log = db.piketLog.find((l) => l.taskId === task.id && l.date === k && l.userId === a?.userId);
                       return (
-                        <div key={d} className={`rounded-xl border px-2 py-2 text-center ${isMe ? "border-amber/40 bg-amber/10" : "border-line bg-panel2"} ${!u ? "border-dashed" : ""}`}>
-                          <p className="font-mono text-[10px] uppercase tracking-widest text-faint">{dayLabels[d - 1]}</p>
-                          {u ? <button onClick={() => isAdmin && setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap mt-1 flex w-full flex-col items-center gap-0.5 ${!isAdmin ? "cursor-default" : ""}`}><Avatar user={u} size={28} /><span className="max-w-[72px] truncate text-[11px] font-medium text-ink">{u.name.split(" ")[0]}</span>{log && <Chip tone="ok" className="!px-1 !py-0 text-[9px]"><Check size={8} /></Chip>}</button> : <span className="mt-2 font-mono text-[10px] text-faint">—</span>}
+                        <div key={d} className={`rounded-xl border px-2 py-2 text-center ${k === todayKey() ? "border-amber/30 bg-amber/5" : isMe ? "border-amber/40 bg-amber/10" : "border-line bg-panel2"} ${!u ? "border-dashed" : ""}`}>
+                          <p className="font-mono text-[9px] uppercase tracking-widest text-faint">{dayLabels[d - 1]}<br /><span className="text-[10px] text-ink">{fmtDate(k).slice(0,5)}</span></p>
+                          {u ? <button onClick={() => isAdmin && setAssignFor({ taskId: task.id, taskName: task.name })} className={`tap mt-1 flex w-full flex-col items-center gap-0.5 ${!isAdmin ? "cursor-default" : ""}`}><Avatar user={u} size={28} /><span className="max-w-[72px] truncate text-[11px] font-medium text-ink">{u.name.split(" ")[0]}</span><span className="font-mono text-[8px] text-faint">{u.employeeId}</span>{log && <Chip tone="ok" className="!px-1 !py-0 text-[9px]"><Check size={8} /></Chip>}</button> : <span className="mt-2 font-mono text-[10px] text-faint">—</span>}
                         </div>
                       );
                     })}
