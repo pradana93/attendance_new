@@ -355,8 +355,16 @@ function Roster({ user }: { user: User }) {
             <button onClick={() => setMatrixFull(false)} className="tap rounded-lg border border-line bg-panel2 px-3 py-1.5 font-mono text-[11px] text-ink">✕ Close</button>
           </div>
           <div className="flex-1 overflow-auto p-3">
-            <div className="space-y-3">
-              {db.tasks.filter((x) => x.active).map((task) => (
+            {db.template.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <ClipboardList size={32} className="text-faint" />
+                <p className="ttl mt-3 text-[14px] font-bold text-ink">No assignments yet</p>
+                <p className="mt-1 max-w-[28ch] font-mono text-[11px] text-faint">Piket Matrix is empty — create assignments in Template → Assign to see transparency here.</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {db.tasks.filter((x) => x.active).map((task) => (
                 <div key={task.id} className="card p-3">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber/12 text-amber"><TaskGlyph icon={task.icon} size={14} /></span>
@@ -384,6 +392,8 @@ function Roster({ user }: { user: User }) {
               ))}
             </div>
             <p className="p-2 text-center font-mono text-[10px] text-faint">Ruang gerak full • 3-col mobile → 6-col desktop • tap {isAdmin ? "to reassign" : "to view"} • amber = you</p>
+              </>
+            )}
           </div>
         </div>
       )}
