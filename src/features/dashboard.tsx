@@ -336,7 +336,7 @@ export default function Dashboard({ user, goTab, onBell, onAdminSec }: {
         </div>
       )}
 
-      <CheckFlow user={user} open={flowOpen} onClose={() => setFlowOpen(false)} onDone={() => setNow(new Date())} />
+      <CheckFlow user={user} open={flowOpen} onClose={() => setFlowOpen(false)} onDone={() => setNow(new Date())} onPunched={setRemoteRec} />
 
       {/* announcement list */}
       <Sheet open={annList} onClose={() => setAnnList(false)} title={t("d.notice")}>
@@ -489,7 +489,7 @@ export function GeofenceMap({ lat, lng, radius, pos, inside }: {
 }
 
 /* =============== check-in/out flow =============== */
-function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean; onClose: () => void; onDone: () => void }) {
+function CheckFlow({ user, open, onClose, onDone, onPunched }: { user: User; open: boolean; onClose: () => void; onDone: () => void; onPunched?: (rec: Attendance) => void }) {
   const db = getDB();
   const t = useT();
   const [stage, setStage] = useState<"gps" | "verify" | "result">("gps");
@@ -595,6 +595,8 @@ function CheckFlow({ user, open, onClose, onDone }: { user: User; open: boolean;
     try {
       punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late, early, score, distance: gps.dist, method });
       setRemoteRec(punched);
+      onPunched?.(punched);
+      void refreshProductionData();
       setResult({ ok: true, kind, score, dist: gps.dist, method, rec: punched });
     } catch (error) {
       toast(error instanceof Error ? error.message : "Attendance could not be saved", "err");
