@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Camera, Check, ChevronDown, ChevronUp, ClipboardList, Clock3, Cloud, Copy, Database,
   Download, Globe, Image as ImageIcon, Loader2, LogOut, MapPin, Megaphone, Moon, Pencil, Plus,
-  Radio, RefreshCw, ScanFace, Settings2, Sun, Trash2, UserPlus, Users, X,
+  Radio, RefreshCw, ScanFace, Send, Settings2, Sun, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import type { Department, Lang, Role, User } from "../types";
 import {
@@ -23,7 +23,7 @@ import { createAnnouncement, deleteAnnouncementRemote, setProfileActiveRemote, u
 import { refreshProductionData } from "../lib/store";
 import { enrollFaceRemote, manualAttendanceRemote, reviewSelfReportRemote } from "../lib/production";
 
-export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "cloud" | "config";
+export type AdminSec = "live" | "staff" | "notice" | "points" | "photos" | "feedback" | "shifts" | "cloud" | "config" | "smtp";
 type Sec = AdminSec;
 export const DEPARTMENTS = ["Manager", "Supervisor", "Leader", "Checker Inbound", "Checker Outbound", "Checker Packing", "Packing", "Helper", "Stock Keeper Leader", "Stock Keeper", "Picker"] as const;
 const DEPTS = [...DEPARTMENTS];
@@ -56,6 +56,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
         options={[
           { id: "live", label: t("a.live") }, { id: "staff", label: t("a.staff") }, { id: "notice", label: t("a.notice") },
           { id: "points", label: "Points" }, { id: "photos", label: t("a.photos") }, { id: "feedback", label: t("fb.inbox") }, { id: "shifts", label: "Shifts" }, { id: "cloud", label: t("a.cloud") }, { id: "config", label: t("a.config") },
+          ...(user.role === "superadmin" ? [{ id: "smtp" as AdminSec, label: "SMTP" }] : []),
         ]}
         value={sec} onChange={setSec}
       />
@@ -68,6 +69,7 @@ export default function Admin({ user, sec, onSec }: { user: User; sec: Sec; onSe
       {sec === "shifts" && <ShiftsPanel admin={user} />}
       {sec === "cloud" && <CloudPanel />}
       {sec === "config" && <ConfigPanel />}
+      {sec === "smtp" && <SmtpPanel />}
     </div>
   );
 }
@@ -1190,6 +1192,85 @@ function PointsPanel({ admin }: { admin: User }) {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SmtpPanel() {
+  const [host, setHost] = useState("smtp.gmail.com");
+  const [port, setPort] = useState(587);
+  const [userName, setUserName] = useState("");
+  const [pass, setPass] = useState("");
+  const [sender, setSender] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { productionClient } = await import("../lib/production");
+        const client = productionClient();
+        if (!client) return;
+        const { data } = await client.from("smtp_settings").select("*").maybeSingle();
+        if (data) {
+          setHost(data.host ?? "smtp.gmail.com");
+          setPort(data.port ?? 587);
+          setUserName(data.user_name ?? "");
+          setPass(data.pass_encrypted ?? "");
+          setSender(data.sender ?? "");
+        }
+      } finally { setLoading(false); }
+    })();
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { productionClient } = await import("../lib/production");
+      const client = productionClient();
+      if (!client) throw new Error("Supabase not configured");
+      const { data: { user } } = await client.auth.getUser();
+      const ws = await client.from("profiles").select("workspace_id").eq("id", user!.id).maybeSingle();
+      const wid = (ws.data as any)?.workspace_id;
+      if (!wid) throw new Error("Workspace not found");
+      const { error } = await client.from("smtp_settings").upsert({ workspace_id: wid, host: host.trim(), port, user_name: userName.trim(), pass_encrypted: pass, sender: sender.trim(), updated_at: new Date().toISOString(), updated_by: user!.id }, { onConflict: "workspace_id" });
+      if (error) throw new Error(error.message);
+      toast("SMTP saved", "ok");
+    } catch (e) { toast(e instanceof Error ? e.message : "Could not save SMTP", "err"); }
+    finally { setSaving(false); }
+  };
+  const test = async () => {
+    setTesting(true);
+    try {
+      const { productionClient } = await import("../lib/production");
+      const client = productionClient();
+      if (!client) throw new Error("Supabase not configured");
+      const { error } = await client.functions.invoke("send-gmail-test", { body: { to: userName.trim() } });
+      if (error) throw new Error(error.message);
+      toast("Test email sent to " + userName.trim(), "ok");
+    } catch (e) { toast(e instanceof Error ? e.message : "Test failed - check Gmail App Password", "err"); }
+    finally { setTesting(false); }
+  };
+  if (loading) return <div className="card p-4 font-mono text-[11px] text-faint">Loading SMTP…</div>;
+  return (
+    <div className="a-fadein space-y-3">
+      <div className="card p-4">
+        <p className="ttl text-[13px] font-bold text-ink">Gmail SMTP — Super Admin only</p>
+        <p className="mt-1 font-mono text-[10.5px] text-faint">Host smtp.gmail.com:587 • App Password 16-char • Sender noreply@</p>
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Host"><input className="inp font-mono" value={host} onChange={(e) => setHost(e.target.value)} /></Field>
+            <Field label="Port"><input className="inp font-mono" type="number" value={port} onChange={(e) => setPort(Number(e.target.value))} /></Field>
+          </div>
+          <Field label="Gmail User"><input className="inp font-mono" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="warehouse@gmail.com" /></Field>
+          <Field label="App Password (16-char)"><input className="inp font-mono" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="abcd efgh ijkl mnop" /></Field>
+          <Field label="Sender"><input className="inp font-mono" value={sender} onChange={(e) => setSender(e.target.value)} placeholder="noreply@shiftgate.warehouse" /></Field>
+          <div className="flex gap-2">
+            <Btn className="flex-1" busy={saving} onClick={save}><Check size={14} /> Save SMTP</Btn>
+            <Btn variant="ghost" className="flex-1" busy={testing} onClick={test}><Send size={14} /> Test</Btn>
+          </div>
+          <p className="font-mono text-[10px] text-faint">Get App Password: myaccount.google.com → Security → 2-Step → App passwords → smtp 16-char. Forgot + Admin Reset will use this Gmail.</p>
         </div>
       </div>
     </div>
