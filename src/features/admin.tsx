@@ -1249,13 +1249,13 @@ function SmtpPanel() {
         const { productionClient } = await import("../lib/production");
         const client = productionClient();
         if (!client) return;
-        const { data } = await client.from("smtp_settings").select("*").maybeSingle();
+        const { data } = await client.from("smtp_settings").select("host, port, user_name, sender").maybeSingle();
         if (data) {
-          setHost(data.host ?? "smtp.gmail.com");
-          setPort(data.port ?? 587);
-          setUserName(data.user_name ?? "");
-          setPass(data.pass_encrypted ?? "");
-          setSender(data.sender ?? "");
+          setHost((data as any).host ?? "smtp.gmail.com");
+          setPort((data as any).port ?? 587);
+          setUserName((data as any).user_name ?? "");
+          setSender((data as any).sender ?? "");
+          setPass(""); // never expose pass_encrypted to client — enter new to rotate
         }
       } finally { setLoading(false); }
     })();
@@ -1271,8 +1271,17 @@ function SmtpPanel() {
       const wid = (ws.data as any)?.workspace_id;
       if (!wid) throw new Error("Workspace not found");
       const cleanPass = pass.replace(/\s/g, "");
-      if (cleanPass.length < 16) throw new Error("App Password must be 16 chars (no spaces)");
-      const { error } = await client.from("smtp_settings").upsert({ workspace_id: wid, host: host.trim(), port, user_name: userName.trim(), pass_encrypted: cleanPass, sender: sender.trim(), updated_at: new Date().toISOString(), updated_by: user!.id }, { onConflict: "workspace_id" });
+      const payload: any = { workspace_id: wid, host: host.trim(), port, user_name: userName.trim(), sender: sender.trim(), updated_at: new Date().toISOString(), updated_by: user!.id };
+      if (cleanPass) {
+        if (cleanPass.length < 16) throw new Error("App Password must be 16 chars (no spaces)");
+        payload.pass_encrypted = cleanPass;
+      } else {
+        // keep existing pass — fetch to avoid overwriting with empty
+        const { data: existing } = await client.from("smtp_settings").select("pass_encrypted").eq("workspace_id", wid).maybeSingle();
+        if (!existing?.pass_encrypted) throw new Error("App Password required (16-char) for first save");
+        payload.pass_encrypted = (existing as any).pass_encrypted;
+      }
+      const { error } = await client.from("smtp_settings").upsert(payload, { onConflict: "workspace_id" });
       if (error) throw new Error(error.message);
       toast("SMTP saved — now Test", "ok");
     } catch (e) { toast(e instanceof Error ? e.message : "Could not save SMTP", "err"); }
