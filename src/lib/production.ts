@@ -682,9 +682,20 @@ export async function punchAttendance(args: {
   score?: number;
   distance?: number;
   method: "face" | "qr" | "manual";
+  lat?: number;
+  lng?: number;
+  simulated?: boolean;
 }): Promise<Attendance> {
   const client = productionClient();
   if (!client) throw new Error("Supabase is not configured for this deployment.");
+  // Try server-validated Edge first (GPS haversine + face_enrolled), fallback to direct for offline
+  if (typeof args.lat === "number" && typeof args.lng === "number") {
+    try {
+      const { data, error } = await client.functions.invoke("punch-attendance", { body: { userId: args.userId, date: args.date, kind: args.kind, lat: args.lat, lng: args.lng, simulated: !!args.simulated, score: args.score, method: args.method } });
+      if (!error && (data as any)?.attendance) return mapAttendance((data as any).attendance as AttendanceRow);
+      if (error) console.warn("Edge punch failed, fallback direct", error);
+    } catch (e) { console.warn("Edge punch exception, fallback", e); }
+  }
   const timestamp = new Date().toISOString();
   const existing = await todayAttendance(args.userId, args.date);
   let workspaceId: string | undefined;

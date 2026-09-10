@@ -593,7 +593,7 @@ function CheckFlow({ user, open, onClose, onDone, onPunched }: { user: User; ope
     
     let punched: Attendance;
     try {
-      punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late, early, score, distance: gps.dist, method });
+      punched = await punchAttendance({ userId: user.id, date: todayKey(), kind, late, early, score, distance: gps.dist, method, lat: gps.pos?.lat, lng: gps.pos?.lng, simulated: gps.simulated });
       setRemoteRec(punched);
       onPunched?.(punched);
       void refreshProductionData();
