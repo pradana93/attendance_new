@@ -397,28 +397,48 @@ function TaskIcon({ icon }: { icon: PiketTask["icon"] }) {
   );
 }
 
-/* =============== SVG geofence map (zero deps) =============== */
+/* =============== Geofence map — Leaflet interactive with SVG fallback (offline-safe) =============== */
 export function GeofenceMap({ lat, lng, radius, pos, inside }: {
   lat: number; lng: number; radius: number;
   pos: { lat: number; lng: number } | null; inside: boolean | null;
 }) {
-  // Convert lat/lng deltas to SVG coordinates (simple equirectangular projection for small area)
-  const toSvg = (pLat: number, pLng: number) => {
-    const dLat = pLat - lat;
-    const dLng = pLng - lng;
-    const x = 150 + dLng * 6000; // scale factor for longitude
-    const y = 150 - dLat * 6000; // scale factor for latitude (inverted Y)
-    return { x, y };
-  };
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [fallback, setFallback] = useState(false);
+  useEffect(() => {
+    let map: any;
+    let cancelled = false;
+    (async () => {
+      try {
+        const L: any = await import("leaflet");
+        if (cancelled || !mapRef.current) return;
+        map = L.map(mapRef.current, { zoomControl: false, attributionControl: false, dragging: !L.Browser.mobile, tap: true }).setView([lat, lng], 17);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+        L.circle([lat, lng], { radius, color: "#ffb224", fillColor: "#ffb224", fillOpacity: 0.08, dashArray: "6 6", weight: 2 }).addTo(map);
+        L.rectangle([[lat - 0.0005, lng - 0.0007], [lat + 0.0005, lng + 0.0007]], { color: "#5ac8e8", weight: 1.5, dashArray: "3 5", fillOpacity: 0.07 }).addTo(map);
+        L.circleMarker([lat, lng], { radius: 5, color: "#ffb224", fillColor: "#ffb224", fillOpacity: 1 }).addTo(map).bindTooltip("beacon", { permanent: true, direction: "top", offset: [0, -8] } as any);
+        if (pos) {
+          const color = inside === false ? "#ff5c5c" : "#3ed598";
+          L.circleMarker([pos.lat, pos.lng], { radius: 8, color, fillColor: color, fillOpacity: 1 }).addTo(map);
+          L.circleMarker([pos.lat, pos.lng], { radius: 4, color: "#0f1318", fillColor: "#0f1318", fillOpacity: 1 }).addTo(map);
+        }
+      } catch {
+        if (!cancelled) setFallback(true);
+      }
+    })();
+    return () => { cancelled = true; if (map) try { map.remove(); } catch {} };
+  }, [lat, lng, radius, pos?.lat, pos?.lng, inside]);
 
-  const center = toSvg(lat, lng);
-  const userPos = pos ? toSvg(pos.lat, pos.lng) : null;
-  
-  // Calculate radius in SVG units (approximate: 1 degree ≈ 111km)
-  const svgRadius = (radius / 111000) * 6000;
-
-  return (
-    <svg viewBox="0 0 300 300" className="h-full w-full bg-[#0f1318]">
+  if (fallback) {
+    const toSvg = (pLat: number, pLng: number) => {
+      const dLat = pLat - lat;
+      const dLng = pLng - lng;
+      return { x: 150 + dLng * 6000, y: 150 - dLat * 6000 };
+    };
+    const center = toSvg(lat, lng);
+    const userPos = pos ? toSvg(pos.lat, pos.lng) : null;
+    const svgRadius = (radius / 111000) * 6000;
+    return (
+      <svg viewBox="0 0 300 300" className="h-full w-full bg-[#0f1318]">
       {/* Grid lines */}
       <defs>
         <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
@@ -486,6 +506,8 @@ export function GeofenceMap({ lat, lng, radius, pos, inside }: {
       </defs>
     </svg>
   );
+  }
+  return <div ref={mapRef} className="h-full w-full min-h-[220px] rounded-xl border border-line bg-panel2" style={{ isolation: "isolate" }} />;
 }
 
 /* =============== check-in/out flow =============== */
