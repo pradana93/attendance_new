@@ -338,8 +338,8 @@ html {
   .reveal { opacity: 1; transform: none; transition: none; }
   .a-rise, .a-drop, .a-pop, .a-fadein, .stagger > * { animation-duration: 0.001s; }
 }
-/* living cards */
-.card { transition: border-color 0.2s ease, box-shadow 0.25s ease; }
+/* living cards — content-visibility for FPS */
+.card { transition: border-color 0.2s ease, box-shadow 0.25s ease; content-visibility: auto; contain-intrinsic-size: 200px; }
 .card:hover {
   border-color: color-mix(in srgb, var(--amber) 32%, var(--line));
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.16);
@@ -364,34 +364,41 @@ body::before {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
 }
-/* slow radar-beacon sweep drifting behind the app */
+/* slow radar-beacon sweep drifting behind the app — GPU promoted, reduced cost */
 body::after {
   content: "";
   position: fixed; inset: -45%; z-index: -1; pointer-events: none;
   background: conic-gradient(from 0deg at 50% 40%, transparent 0deg, var(--glow1) 22deg, transparent 58deg, transparent 180deg, var(--glow2) 205deg, transparent 245deg);
-  animation: sweep 32s linear infinite;
+  animation: sweep 48s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
+  contain: strict;
 }
-@keyframes sweep { to { transform: rotate(360deg); } }
+@keyframes sweep { to { transform: rotate(360deg) translateZ(0); } }
+@media (max-width: 768px) { body::after { animation-duration: 64s; opacity: 0.6; } }
 
-/* big primary action — layered depth + light sweep + press physics */
-.punch { position: relative; overflow: hidden; isolation: isolate; transition: transform 0.1s ease, filter 0.15s ease, box-shadow 0.2s ease; }
+/* big primary action — layered depth + light sweep + press physics — GPU promoted */
+.punch { position: relative; overflow: hidden; isolation: isolate; transition: transform 0.1s ease, filter 0.15s ease, box-shadow 0.2s ease; will-change: transform; contain: layout paint; }
 .punch::before {
   content: ""; position: absolute; inset: -40%; z-index: 1; pointer-events: none;
   background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.4) 50%, transparent 58%);
-  transform: translateX(-75%);
-  animation: punchshine 3s ease-in-out infinite;
+  transform: translateX(-75%) translateZ(0);
+  animation: punchshine 4.5s ease-in-out infinite;
+  will-change: transform;
 }
-@keyframes punchshine { 0%, 52% { transform: translateX(-75%); } 82%, 100% { transform: translateX(75%); } }
-.punch:active { transform: translateY(2px) scale(0.985); filter: brightness(1.08); }
+@keyframes punchshine { 0%, 52% { transform: translateX(-75%) translateZ(0); } 82%, 100% { transform: translateX(75%) translateZ(0); } }
+.punch:active { transform: translateY(2px) scale(0.985) translateZ(0); filter: brightness(1.08); }
 
-/* instrument-panel clock face with a passing scanline */
-.clockface { position: relative; }
+/* instrument-panel clock face with a passing scanline — GPU promoted */
+.clockface { position: relative; contain: layout paint; }
 .clockface::after {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 32%; pointer-events: none;
   background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--cool) 6%, transparent) 72%, color-mix(in srgb, var(--cool) 12%, transparent));
-  animation: clockscan 5.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: clockscan 7s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: transform;
+  transform: translateZ(0);
 }
-@keyframes clockscan { 0% { transform: translateY(-115%); } 100% { transform: translateY(430%); } }
+@keyframes clockscan { 0% { transform: translateY(-115%) translateZ(0); } 100% { transform: translateY(430%) translateZ(0); } }
 .colon { animation: blinkc 1s step-end infinite; color: var(--amber); }
 .tabular { font-variant-numeric: tabular-nums; }
 

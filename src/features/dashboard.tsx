@@ -411,7 +411,7 @@ export function GeofenceMap({ lat, lng, radius, pos, inside }: {
       try {
         const L: any = await import("leaflet");
         if (cancelled || !mapRef.current) return;
-        map = L.map(mapRef.current, { zoomControl: false, attributionControl: false, dragging: !L.Browser.mobile, tap: true }).setView([lat, lng], 17);
+        map = L.map(mapRef.current, { zoomControl: false, attributionControl: false, dragging: !L.Browser.mobile, tap: true, preferCanvas: true } as any).setView([lat, lng], 17);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
         L.circle([lat, lng], { radius, color: "#ffb224", fillColor: "#ffb224", fillOpacity: 0.08, dashArray: "6 6", weight: 2 }).addTo(map);
         L.rectangle([[lat - 0.0005, lng - 0.0007], [lat + 0.0005, lng + 0.0007]], { color: "#5ac8e8", weight: 1.5, dashArray: "3 5", fillOpacity: 0.07 }).addTo(map);
@@ -507,7 +507,7 @@ export function GeofenceMap({ lat, lng, radius, pos, inside }: {
     </svg>
   );
   }
-  return <div ref={mapRef} className="h-full w-full min-h-[220px] rounded-xl border border-line bg-panel2" style={{ isolation: "isolate" }} />;
+  return <div ref={mapRef} className="h-full w-full min-h-[220px] rounded-xl border border-line bg-panel2" style={{ isolation: "isolate", willChange: "transform", contain: "strict" } as any} />;
 }
 
 /* =============== check-in/out flow =============== */
